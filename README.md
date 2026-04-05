@@ -21,7 +21,7 @@
 
 **AI 聊天** - 支持 OpenAI 兼容格式和 Anthropic 原生 API。流式输出、思考过程、Markdown 渲染、代码高亮。
 
-**39 个像素动画** - 手绘 32x32 像素风格，包含呼吸、眨眼、思考、开心、拖拽、睡觉等丰富动画，实时响应你的操作。
+**36 个像素动画** - 手绘 32x32 像素风格，包含呼吸、眨眼、思考、开心、拖拽、睡觉等丰富动画，实时响应你的操作。
 
 **智能行为** - 检测你的活动（写代码、浏览网页、玩游戏），夜晚会犯困，自己在桌面散步，主动找你聊天。
 
@@ -164,14 +164,14 @@ pnpm run build
 
 <p align="center">
   <strong>An AI-powered pixel art desktop pet that lives on your screen.</strong><br>
-  Chat, set reminders, generate images, and enjoy 39 hand-crafted animations.
+  Chat, set reminders, generate images, and enjoy 36 hand-crafted animations.
 </p>
 
 ## Features
 
 **AI Companion** - Chat with your desktop pet using OpenAI-compatible or Anthropic APIs. Streaming responses with thinking process, Markdown rendering, and code highlighting.
 
-**39 Pixel Animations** - Hand-drawn 32x32 pixel art with idle breathing, emotions, interactions, and contextual behaviors. The pet reacts to your actions in real-time.
+**36 Pixel Animations** - Hand-drawn 32x32 pixel art with idle breathing, emotions, interactions, and contextual behaviors. The pet reacts to your actions in real-time.
 
 **Smart Behaviors** - Detects your activity (coding, browsing, gaming), gets sleepy at night, walks around your desktop, and proactively starts conversations.
 
