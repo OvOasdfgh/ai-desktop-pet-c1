@@ -1,0 +1,63 @@
+@font-face {
+  font-family: 'Fusion Pixel';
+  src: url('../../fonts/FusionPixel-12-zhHans.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+[data-theme="pixel"] {
+  --font-family: 'Fusion Pixel', monospace;
+  --border-radius: 0px;
+  --border: 2px solid rgb(200, 180, 170);
+  --bg-bubble: rgb(255, 248, 240);
+  --text-primary: rgb(80, 60, 50);
+  --shadow: none;
+}
+
+[data-theme="clean"] {
+  --font-family: system-ui, -apple-system, sans-serif;
+  --border-radius: 12px;
+  --border: 1px solid rgba(200, 180, 170, 0.3);
+  --bg-bubble: rgba(255, 248, 240, 0.95);
+  --text-primary: rgb(80, 60, 50);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+* { margin: 0; padding: 0; }
+
+html, body {
+  overflow: hidden;
+  background: transparent;
+  text-align: center;
+  padding: 10px 0;
+}
+
+.bubble {
+  display: inline-block;
+  max-width: 200px;
+  padding: 6px 12px;
+  font-family: var(--font-family);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--c-pet-bubble-text, var(--text-primary));
+  background: var(--bg-bubble);
+  border: var(--border);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  white-space: normal;
+  word-break: break-word;
+  text-align: center;
+  transition: opacity 300ms ease-out;
+  max-height: calc(1.4em * 2);
+  overflow: hidden;
+}
+
+.bubble.hidden {
+  display: none;
+}
+
+.bubble.fading {
+  opacity: 0;
+}

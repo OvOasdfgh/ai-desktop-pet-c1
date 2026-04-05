@@ -1,0 +1,55 @@
+{
+  "name": "c1-pet",
+  "version": "0.1.0",
+  "description": "AI desktop pet with pixel art animations",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "postinstall": "node -e \"require('fs').cpSync('node_modules/dompurify/dist/purify.min.js','src/renderer/chat/vendor/purify.min.js')\""
+  },
+  "build": {
+    "appId": "com.c1pet.app",
+    "productName": "C1 Desktop Pet",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "output/states.json",
+      "output/sheets/*_sheet.png",
+      "node_modules/**/*",
+      "!node_modules/electron/**",
+      "!node_modules/.pnpm/electron@*/**",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,readme.md,LICENSE,license}",
+      "!**/*.map"
+    ],
+    "win": {
+      "icon": "src/assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "C1 Desktop Pet"
+    }
+  },
+  "devDependencies": {
+    "electron": "^41.1.0",
+    "electron-builder": "^26.8.1"
+  },
+  "dependencies": {
+    "dompurify": "^3.3.3",
+    "highlight.js": "^11.11.1",
+    "marked": "^17.0.5"
+  }
+}

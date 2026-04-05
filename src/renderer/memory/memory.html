@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="memory.css">
+</head>
+<body data-theme="pixel">
+  <div class="memory-container entering">
+    <div class="memory-header">
+      <span class="memory-title" id="memoryTitle">Memory</span>
+      <div class="memory-header-drag"></div>
+      <button class="memory-close" id="closeBtn">
+        <svg class="icon-pixel" width="10" height="10" viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8" stroke="currentColor" stroke-width="1"/><line x1="8" y1="2" x2="2" y2="8" stroke="currentColor" stroke-width="1"/></svg>
+        <svg class="icon-clean" width="10" height="10" viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="8" y1="2" x2="2" y2="8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="memory-body">
+      <!-- Core Memory -->
+      <div class="memory-group">
+        <div class="memory-group-title">
+          <span id="coreMemoryLabel">Core Memory</span>
+          <span class="memory-count" id="coreCount"></span>
+        </div>
+        <div class="memory-list" id="coreList"></div>
+        <div class="memory-empty" id="coreEmpty">No memories saved yet</div>
+      </div>
+
+      <!-- Archive -->
+      <div class="memory-group">
+        <div class="memory-group-title" id="archiveLabel">Conversation Archive</div>
+        <div class="memory-list" id="archiveList"></div>
+        <div class="memory-empty" id="archiveEmpty">No archived conversations</div>
+      </div>
+
+      <!-- Chat Logs -->
+      <div class="memory-group">
+        <div class="memory-group-title" id="chatLogsLabel">Chat Logs</div>
+        <div class="memory-list" id="chatLogsList"></div>
+        <div class="memory-empty" id="chatLogsEmpty">No chat logs</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="memory-footer">
+      <div class="memory-path-row">
+        <span class="memory-path-label" id="storagePathLabel">Storage Path</span>
+        <span class="memory-path-value" id="storagePath" title=""></span>
+        <button class="memory-btn-small" id="changePathBtn">Change</button>
+      </div>
+      <div class="memory-actions">
+        <button class="memory-btn" id="openFolderBtn">Open Folder</button>
+        <button class="memory-btn memory-btn-danger" id="clearAllBtn">Clear All</button>
+      </div>
+    </div>
+
+    <!-- Confirm overlay -->
+    <div class="confirm-overlay" id="confirmOverlay" style="display:none">
+      <div class="confirm-dialog">
+        <div class="confirm-title" id="confirmTitle"></div>
+        <div class="confirm-message" id="confirmMessage"></div>
+        <div class="confirm-actions">
+          <button class="confirm-cancel" id="confirmCancel">Cancel</button>
+          <button class="confirm-ok" id="confirmOk">Clear All</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="memory.js"></script>
+</body>
+</html>

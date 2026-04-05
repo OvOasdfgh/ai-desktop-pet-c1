@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="customize.css">
+</head>
+<body data-theme="pixel">
+  <div class="customize-container entering">
+    <div class="customize-header">
+      <span class="customize-title" id="customizeTitle">Customize</span>
+      <div class="customize-header-drag"></div>
+      <button class="customize-close" id="closeBtn">
+        <svg class="icon-pixel" width="10" height="10" viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8" stroke="currentColor" stroke-width="1"/><line x1="8" y1="2" x2="2" y2="8" stroke="currentColor" stroke-width="1"/></svg>
+        <svg class="icon-clean" width="10" height="10" viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="8" y1="2" x2="2" y2="8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="customize-body">
+      <!-- Color Scheme -->
+      <div class="customize-group">
+        <div class="customize-group-title" id="colorSchemeTitle">Color Scheme</div>
+
+        <!-- Presets -->
+        <div class="preset-section">
+          <div class="preset-label" id="presetsLabel">Presets</div>
+          <div class="preset-grid">
+            <button class="preset-btn" data-preset="default">
+              <span class="preset-swatch" style="background: #FFB4B4"></span>
+              <span class="preset-name" id="presetDefault">Sweet Pink</span>
+            </button>
+            <button class="preset-btn" data-preset="lavender">
+              <span class="preset-swatch" style="background: #C4A8FF"></span>
+              <span class="preset-name" id="presetLavender">Lavender</span>
+            </button>
+            <button class="preset-btn" data-preset="mint">
+              <span class="preset-swatch" style="background: #8DD9B8"></span>
+              <span class="preset-name" id="presetMint">Mint</span>
+            </button>
+            <button class="preset-btn" data-preset="sky">
+              <span class="preset-swatch" style="background: #8DBCE8"></span>
+              <span class="preset-name" id="presetSky">Sky</span>
+            </button>
+            <button class="preset-btn" data-preset="amber">
+              <span class="preset-swatch" style="background: #E8C08D"></span>
+              <span class="preset-name" id="presetAmber">Amber</span>
+            </button>
+            <button class="preset-btn" data-preset="dark">
+              <span class="preset-swatch" style="background: #FF9E9E; border: 1px solid #453535"></span>
+              <span class="preset-name" id="presetDark">Dark Night</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom Colors (collapsible) -->
+        <div class="color-section">
+          <button class="color-section-toggle" id="colorToggle">
+            <span class="toggle-arrow">&#9654;</span>
+            <span id="customColorsLabel">Custom Colors</span>
+          </button>
+          <div class="color-section-body" id="colorBody" style="display:none">
+            <div class="color-row">
+              <label id="labelAccent">Accent</label>
+              <input type="color" id="colorAccent" value="#FFB4B4">
+              <span class="color-hex" data-for="colorAccent">#FFB4B4</span>
+            </div>
+            <div class="color-row">
+              <label id="labelUserBubble">User Bubble</label>
+              <input type="color" id="colorUserBubble" value="#FFDADA">
+              <span class="color-hex" data-for="colorUserBubble">#FFDADA</span>
+            </div>
+            <div class="color-row">
+              <label id="labelPetBubble">Pet Bubble</label>
+              <input type="color" id="colorPetBubble" value="#FFF8F0">
+              <span class="color-hex" data-for="colorPetBubble">#FFF8F0</span>
+            </div>
+            <div class="color-row">
+              <label id="labelPanelBg">Panel Background</label>
+              <input type="color" id="colorPanelBg" value="#FFFAF5">
+              <span class="color-hex" data-for="colorPanelBg">#FFFAF5</span>
+            </div>
+            <div class="color-row">
+              <label id="labelHeaderBg">Header Background</label>
+              <input type="color" id="colorHeaderBg" value="#FFF5EE">
+              <span class="color-hex" data-for="colorHeaderBg">#FFF5EE</span>
+            </div>
+            <div class="color-row">
+              <label id="labelBorder">Border</label>
+              <input type="color" id="colorBorder" value="#C8B4AA">
+              <span class="color-hex" data-for="colorBorder">#C8B4AA</span>
+            </div>
+            <div class="color-row">
+              <label id="labelUserBubbleText">User Text</label>
+              <input type="color" id="colorUserBubbleText" value="#503C32">
+              <span class="color-hex" data-for="colorUserBubbleText">#503C32</span>
+            </div>
+            <div class="color-row">
+              <label id="labelPetBubbleText">Pet Text</label>
+              <input type="color" id="colorPetBubbleText" value="#503C32">
+              <span class="color-hex" data-for="colorPetBubbleText">#503C32</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Opacity (clean theme only) -->
+        <div class="opacity-section" id="opacitySection">
+          <div class="opacity-header">
+            <label id="opacityLabel">Panel Opacity</label>
+            <span class="opacity-value" id="opacityValue">88%</span>
+          </div>
+          <input type="range" id="opacitySlider" min="50" max="100" step="5" value="88" class="opacity-range">
+        </div>
+      </div>
+
+      <!-- Character -->
+      <div class="customize-group">
+        <div class="customize-group-title" id="characterTitle">Character</div>
+
+        <div class="character-section">
+          <div class="character-current">
+            <label id="currentCharLabel">Current</label>
+            <div class="custom-dropdown" id="characterDropdown" data-value="">
+              <div class="custom-dropdown-trigger">
+                <span class="custom-dropdown-text">C1 (Default)</span>
+                <svg class="custom-dropdown-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="custom-dropdown-panel">
+                <div class="custom-dropdown-option selected" data-value="">C1 (Default)</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="character-actions">
+            <button class="character-btn" id="importCharBtn">
+              <span id="importCharLabel">Import</span>
+            </button>
+            <button class="character-btn" id="exportCharBtn">
+              <span id="exportCharLabel">Export</span>
+            </button>
+            <button class="character-btn character-btn-danger" id="deleteCharBtn">
+              <span id="deleteCharLabel">Delete</span>
+            </button>
+          </div>
+
+          <div class="character-info" id="characterInfo" style="display:none">
+            <div class="character-info-row">
+              <span class="info-label" id="charNameLabel">Name</span>
+              <span class="info-value" id="charNameValue">-</span>
+            </div>
+            <div class="character-info-row">
+              <span class="info-label" id="charSizeLabel">Frame Size</span>
+              <span class="info-value" id="charSizeValue">-</span>
+            </div>
+            <div class="character-info-row">
+              <span class="info-label" id="charStatesLabel">States</span>
+              <span class="info-value" id="charStatesValue">-</span>
+            </div>
+          </div>
+
+          <div class="character-status" id="characterStatus" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- Animation States -->
+      <div class="customize-group">
+        <div class="customize-group-title" id="animStatesTitle">Animation States</div>
+
+        <!-- Preview -->
+        <div class="state-preview-container">
+          <span class="preview-hint" id="previewHint">Click a state below to preview</span>
+          <canvas id="statePreviewCanvas" width="128" height="160" style="display:none"></canvas>
+          <div class="state-preview-info" id="previewInfo" style="display:none">
+            <span class="state-preview-name" id="previewStateName">-</span>
+            <span class="state-preview-frames" id="previewStateFrames"></span>
+          </div>
+        </div>
+
+        <!-- State status (for replace/reset feedback) -->
+        <div class="state-status" id="stateStatus" style="display:none"></div>
+
+        <!-- State groups (rendered by JS) -->
+        <div id="stateGroupsContainer"></div>
+      </div>
+
+      <!-- Storage -->
+      <div class="customize-group">
+        <div class="customize-group-title" id="storageTitle">Storage</div>
+        <div class="storage-section">
+          <div class="storage-path-row">
+            <span class="storage-path" id="storagePath"></span>
+            <button class="character-btn" id="browseStorageBtn">
+              <span id="browseStorageLabel">Browse</span>
+            </button>
+          </div>
+          <div class="storage-size" id="storageSize"></div>
+        </div>
+      </div>
+
+      <!-- Reset -->
+      <div class="customize-group reset-group">
+        <button class="reset-all-btn" id="resetAllBtn">Reset All Settings</button>
+      </div>
+    </div>
+
+    <!-- Confirm overlay -->
+    <div class="confirm-overlay" id="confirmOverlay" style="display:none">
+      <div class="confirm-dialog">
+        <div class="confirm-title" id="confirmTitle"></div>
+        <div class="confirm-message" id="confirmMessage"></div>
+        <div class="confirm-actions">
+          <button class="confirm-cancel" id="confirmCancel">Cancel</button>
+          <button class="confirm-ok" id="confirmOk">Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="customize.js"></script>
+</body>
+</html>

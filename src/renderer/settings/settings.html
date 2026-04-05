@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body data-theme="pixel">
+  <div class="settings-container entering">
+    <div class="settings-header">
+      <span class="settings-title" id="settingsTitle">Settings</span>
+      <div class="settings-header-drag"></div>
+      <button class="settings-close" id="closeBtn">
+        <svg class="icon-pixel" width="10" height="10" viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8" stroke="currentColor" stroke-width="1"/><line x1="8" y1="2" x2="2" y2="8" stroke="currentColor" stroke-width="1"/></svg>
+        <svg class="icon-clean" width="10" height="10" viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="8" y1="2" x2="2" y2="8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <!-- API Configuration -->
+      <div class="settings-group">
+        <div class="settings-group-title" id="apiConfigTitle">API Configuration</div>
+
+        <div class="settings-field">
+          <label id="apiTypeLabel">API Type</label>
+          <div class="custom-dropdown" id="apiType" data-value="openai">
+            <div class="custom-dropdown-trigger">
+              <span class="custom-dropdown-text">OpenAI Compatible</span>
+              <svg class="custom-dropdown-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="custom-dropdown-panel">
+              <div class="custom-dropdown-option" data-value="openai" id="apiTypeOpenAI">OpenAI Compatible</div>
+              <div class="custom-dropdown-option" data-value="anthropic" id="apiTypeAnthropic">Anthropic</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label id="apiEndpointLabel">API Endpoint</label>
+          <input type="text" id="apiEndpoint" placeholder="https://api.example.com/v1">
+        </div>
+
+        <div class="settings-field">
+          <label id="apiKeyLabel">API Key</label>
+          <div class="settings-password-wrapper">
+            <input type="password" id="apiKey" placeholder="sk-...">
+            <button class="settings-eye-btn" id="apiKeyToggle" type="button">
+              <svg class="eye-open" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3C4 3 1.5 8 1.5 8s2.5 5 6.5 5 6.5-5 6.5-5S12 3 8 3z" stroke="currentColor" stroke-width="1.2"/>
+                <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/>
+              </svg>
+              <svg class="eye-closed" width="16" height="16" viewBox="0 0 16 16" fill="none" style="display:none">
+                <path d="M8 3C4 3 1.5 8 1.5 8s2.5 5 6.5 5 6.5-5 6.5-5S12 3 8 3z" stroke="currentColor" stroke-width="1.2"/>
+                <line x1="2" y1="2" x2="14" y2="14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label id="modelNameLabel">Model Name</label>
+          <input type="text" id="modelName" placeholder="e.g. gpt-5.4, claude-sonnet-4-6, deepseek-chat">
+        </div>
+      </div>
+
+      <!-- Image Generation API -->
+      <div class="settings-group">
+        <div class="settings-group-title" id="imageApiConfigTitle">Image Generation API</div>
+
+        <div class="settings-field">
+          <label id="imageApiEndpointLabel">API Endpoint</label>
+          <input type="text" id="imageApiEndpoint" placeholder="https://api.openai.com/v1">
+        </div>
+
+        <div class="settings-field">
+          <label id="imageApiKeyLabel">API Key</label>
+          <div class="settings-password-wrapper">
+            <input type="password" id="imageApiKey" placeholder="sk-...">
+            <button class="settings-eye-btn" id="imageApiKeyToggle" type="button">
+              <svg class="eye-open" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3C4 3 1.5 8 1.5 8s2.5 5 6.5 5 6.5-5 6.5-5S12 3 8 3z" stroke="currentColor" stroke-width="1.2"/>
+                <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/>
+              </svg>
+              <svg class="eye-closed" width="16" height="16" viewBox="0 0 16 16" fill="none" style="display:none">
+                <path d="M8 3C4 3 1.5 8 1.5 8s2.5 5 6.5 5 6.5-5 6.5-5S12 3 8 3z" stroke="currentColor" stroke-width="1.2"/>
+                <line x1="2" y1="2" x2="14" y2="14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label id="imageModelNameLabel">Model Name</label>
+          <input type="text" id="imageModelName" placeholder="e.g. dall-e-3, gpt-image-1">
+        </div>
+      </div>
+
+      <!-- AI Behavior -->
+      <div class="settings-group">
+        <div class="settings-group-title" id="aiBehaviorTitle">AI Behavior</div>
+
+        <div class="settings-field settings-field-row">
+          <label id="deepThinkingLabel">Deep Thinking</label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="deepThinking">
+            <span class="settings-toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-field settings-field-row">
+          <label id="visionLabel">Vision</label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="visionEnabled">
+            <span class="settings-toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-field settings-field-row">
+          <label id="memoryLabel">Memory</label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="memoryEnabled">
+            <span class="settings-toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-field settings-field-row">
+          <label id="temperatureLabel">Temperature</label>
+          <div class="settings-range-group">
+            <input type="range" id="temperatureRange" min="0" max="2" step="0.1" value="1">
+            <span class="settings-range-value" id="temperatureValue">1.0</span>
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label id="maxTokensLabel">Max Reply Length</label>
+          <div class="custom-dropdown" id="maxTokens" data-value="4096">
+            <div class="custom-dropdown-trigger">
+              <span class="custom-dropdown-text">4096</span>
+              <svg class="custom-dropdown-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="custom-dropdown-panel">
+              <div class="custom-dropdown-option" data-value="1024">1024</div>
+              <div class="custom-dropdown-option" data-value="2048">2048</div>
+              <div class="custom-dropdown-option" data-value="4096">4096</div>
+              <div class="custom-dropdown-option" data-value="8192">8192</div>
+              <div class="custom-dropdown-option" data-value="16384">16384</div>
+              <div class="custom-dropdown-option" data-value="32768">32768</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label id="contextWindowLabel">Context Window</label>
+          <div class="custom-dropdown" id="contextWindow" data-value="4096">
+            <div class="custom-dropdown-trigger">
+              <span class="custom-dropdown-text">4096</span>
+              <svg class="custom-dropdown-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="custom-dropdown-panel">
+              <div class="custom-dropdown-option" data-value="2048">2048</div>
+              <div class="custom-dropdown-option" data-value="4096">4096</div>
+              <div class="custom-dropdown-option" data-value="8192">8192</div>
+              <div class="custom-dropdown-option" data-value="16384">16384</div>
+              <div class="custom-dropdown-option" data-value="32768">32768</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label id="customPersonaLabel">Custom Persona</label>
+          <div class="settings-textarea-wrapper">
+            <textarea id="customPersona" rows="4"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="settings.js"></script>
+</body>
+</html>

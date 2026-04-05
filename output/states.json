@@ -1,0 +1,237 @@
+{
+  "idle": {
+    "frames": 6,
+    "loop": true,
+    "fps": 4,
+    "frameDurations": [300, 250, 200, 200, 250, 300],
+    "group": "basic"
+  },
+  "blink": {
+    "frames": 3,
+    "loop": false,
+    "fps": 6,
+    "group": "basic"
+  },
+  "idle_look": {
+    "frames": 4,
+    "loop": false,
+    "fps": 3,
+    "group": "basic"
+  },
+  "idle_stretch": {
+    "frames": 5,
+    "loop": false,
+    "fps": 3,
+    "group": "basic"
+  },
+  "reading": {
+    "frames": 4,
+    "loop": false,
+    "fps": 3,
+    "group": "conversation"
+  },
+  "thinking": {
+    "frames": 6,
+    "loop": true,
+    "fps": 4,
+    "group": "conversation"
+  },
+  "speaking": {
+    "frames": 6,
+    "loop": true,
+    "fps": 5,
+    "group": "conversation"
+  },
+  "confused": {
+    "frames": 4,
+    "loop": false,
+    "fps": 3,
+    "group": "conversation"
+  },
+  "error": {
+    "frames": 4,
+    "loop": false,
+    "fps": 3,
+    "group": "conversation"
+  },
+  "recall": {
+    "frames": 4,
+    "loop": false,
+    "fps": 3,
+    "group": "memory"
+  },
+  "learn": {
+    "frames": 4,
+    "loop": false,
+    "fps": 3,
+    "group": "memory"
+  },
+  "forget": {
+    "frames": 3,
+    "loop": false,
+    "fps": 2,
+    "group": "memory"
+  },
+  "want_to_talk": {
+    "frames": 6,
+    "loop": true,
+    "fps": 4,
+    "group": "proactive"
+  },
+  "notify": {
+    "frames": 4,
+    "loop": false,
+    "fps": 3,
+    "group": "proactive"
+  },
+  "check_in": {
+    "frames": 3,
+    "loop": false,
+    "fps": 2,
+    "group": "proactive"
+  },
+  "typing": {
+    "frames": 6,
+    "loop": true,
+    "fps": 5,
+    "group": "user_interaction"
+  },
+  "drag": {
+    "frames": 4,
+    "loop": true,
+    "fps": 5,
+    "group": "user_interaction"
+  },
+  "thrown": {
+    "frames": 4,
+    "loop": false,
+    "fps": 5,
+    "group": "user_interaction"
+  },
+  "poked": {
+    "frames": 3,
+    "loop": false,
+    "fps": 5,
+    "group": "user_interaction"
+  },
+  "petted": {
+    "frames": 6,
+    "loop": true,
+    "fps": 3,
+    "group": "user_interaction"
+  },
+  "happy": {
+    "frames": 6,
+    "loop": false,
+    "fps": 5,
+    "group": "emotions"
+  },
+  "excited": {
+    "frames": 6,
+    "loop": false,
+    "fps": 6,
+    "group": "emotions"
+  },
+  "sad": {
+    "frames": 4,
+    "loop": false,
+    "fps": 2,
+    "group": "emotions"
+  },
+  "surprised": {
+    "frames": 3,
+    "loop": false,
+    "fps": 5,
+    "group": "emotions"
+  },
+  "love": {
+    "frames": 4,
+    "loop": false,
+    "fps": 3,
+    "group": "emotions"
+  },
+  "comfort": {
+    "frames": 4,
+    "loop": false,
+    "fps": 2,
+    "group": "emotions"
+  },
+  "sleepy": {
+    "frames": 6,
+    "loop": true,
+    "fps": 2,
+    "group": "environment"
+  },
+  "sleeping": {
+    "frames": 6,
+    "loop": true,
+    "fps": 2,
+    "group": "environment"
+  },
+  "wakeup": {
+    "frames": 4,
+    "loop": false,
+    "fps": 2,
+    "group": "environment"
+  },
+  "greeting": {
+    "frames": 6,
+    "loop": false,
+    "fps": 4,
+    "group": "environment"
+  },
+  "curious": {
+    "frames": 4,
+    "loop": false,
+    "fps": 3,
+    "group": "environment"
+  },
+  "bored": {
+    "frames": 6,
+    "loop": false,
+    "fps": 2,
+    "group": "environment"
+  },
+  "walk": {
+    "frames": 6,
+    "loop": true,
+    "fps": 5,
+    "group": "movement"
+  },
+  "jump": {
+    "frames": 6,
+    "loop": false,
+    "fps": 6,
+    "group": "movement"
+  },
+  "fall": {
+    "frames": 3,
+    "loop": false,
+    "fps": 5,
+    "group": "movement"
+  },
+  "listening": {
+    "frames": 6,
+    "loop": true,
+    "fps": 5,
+    "group": "multimedia"
+  },
+  "voice_reply": {
+    "frames": 6,
+    "loop": true,
+    "fps": 5,
+    "group": "multimedia"
+  },
+  "viewing": {
+    "frames": 3,
+    "loop": false,
+    "fps": 3,
+    "group": "multimedia"
+  },
+  "show_image": {
+    "frames": 3,
+    "loop": false,
+    "fps": 3,
+    "group": "multimedia"
+  }
+}

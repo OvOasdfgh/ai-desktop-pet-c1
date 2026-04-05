@@ -1,0 +1,19 @@
+node_modules/
+dist/
+*.log
+
+# Claude Code local config
+.claude/
+
+# Python cache
+__pycache__/
+
+# Development-only output (not needed at runtime)
+output/frames/
+output/gifs/
+output/previews/
+output/sheets/*_8x.png
+
+# Test/scratch files
+sprite_3.png
+tools/recolor_test.js

@@ -1,0 +1,42 @@
+{
+  "categories": {
+    "coding": {
+      "processes": [
+        "code", "devenv", "idea64", "idea", "webstorm64", "webstorm",
+        "pycharm64", "pycharm", "goland64", "goland", "rider64", "rider",
+        "clion64", "clion", "phpstorm64", "phpstorm", "rubymine64", "rubymine",
+        "sublime_text", "atom", "notepad++", "vim", "nvim", "emacs",
+        "cursor", "windsurf", "zed",
+        "windowsterminal", "cmd", "powershell", "pwsh", "mintty", "alacritty", "wezterm-gui"
+      ],
+      "reaction": "typing",
+      "interrupts": { "blink": 20, "idle_look": 10, "idle_stretch": 10, "typing": 60 }
+    },
+    "browsing": {
+      "processes": [
+        "chrome", "msedge", "firefox", "opera", "brave", "vivaldi", "arc"
+      ],
+      "reaction": null,
+      "interrupts": { "blink": 20, "idle_look": 20, "idle_stretch": 15, "surprised": 45 }
+    },
+    "gaming": {
+      "processes": [],
+      "reaction": null,
+      "interrupts": { "blink": 15, "idle_look": 15, "idle_stretch": 10, "excited": 60 }
+    },
+    "communication": {
+      "processes": [
+        "discord", "slack", "teams", "telegram", "wechat", "qq", "zoom", "skype"
+      ],
+      "reaction": null,
+      "interrupts": { "blink": 15, "idle_look": 20, "idle_stretch": 15, "comfort": 50 }
+    },
+    "media": {
+      "processes": [
+        "spotify", "vlc", "potplayer", "potplayermini64", "mpv", "foobar2000"
+      ],
+      "reaction": null,
+      "interrupts": { "blink": 15, "idle_look": 15, "idle_stretch": 15, "happy": 55 }
+    }
+  }
+}

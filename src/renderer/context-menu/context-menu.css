@@ -1,0 +1,155 @@
+@font-face {
+  font-family: 'Fusion Pixel';
+  src: url('../../fonts/FusionPixel-12-zhHans.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- Theme variables --- */
+[data-theme="pixel"] {
+  --font-family: 'Fusion Pixel', monospace;
+  --font-size: 12px;
+  --line-height: 1.5;
+  --border-radius: 0px;
+  --border: 2px solid rgb(200, 180, 170);
+  --bg-menu: rgb(255, 248, 240);
+  --bg-hover: rgb(255, 230, 220);
+  --text-primary: rgb(80, 60, 50);
+  --text-secondary: rgb(160, 140, 130);
+  --text-disabled: rgb(190, 175, 165);
+  --accent: rgb(255, 180, 180);
+  --separator: rgb(220, 200, 190);
+  --shadow: none;
+  --backdrop-filter: none;
+}
+
+[data-theme="clean"] {
+  --font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-size: 13px;
+  --line-height: 1.5;
+  --border-radius: 8px;
+  --border: 1px solid rgba(200, 180, 170, 0.3);
+  --bg-menu: rgba(255, 248, 240, 0.95);
+  --bg-hover: rgba(255, 218, 218, 0.4);
+  --text-primary: rgb(80, 60, 50);
+  --text-secondary: rgb(160, 140, 130);
+  --text-disabled: rgb(190, 175, 165);
+  --accent: rgb(255, 180, 180);
+  --separator: rgba(200, 180, 170, 0.3);
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --backdrop-filter: blur(12px) saturate(1.5);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: fit-content;
+  height: fit-content;
+  overflow: visible;
+  scrollbar-width: none;
+  background: transparent;
+  user-select: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- Menu container --- */
+.context-menu {
+  display: inline-block;
+  background: var(--bg-menu);
+  border: var(--border);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: var(--backdrop-filter);
+  -webkit-backdrop-filter: var(--backdrop-filter);
+  padding: 4px 0;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  color: var(--text-primary);
+  min-width: 140px;
+}
+
+/* --- Menu item --- */
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 5px 12px 5px 28px;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+  transition: background 80ms;
+}
+
+.menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.menu-item.disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
+.menu-item.disabled:hover {
+  background: none;
+}
+
+/* --- Check / radio indicator --- */
+.menu-item-check {
+  position: absolute;
+  left: 8px;
+  width: 14px;
+  text-align: center;
+  font-size: calc(var(--font-size) - 1px);
+  color: var(--accent);
+}
+
+/* --- Submenu arrow --- */
+.menu-item-arrow {
+  margin-left: auto;
+  padding-left: 16px;
+  color: var(--text-secondary);
+  font-size: calc(var(--font-size) - 2px);
+  line-height: 1;
+}
+
+/* --- Separator --- */
+.menu-separator {
+  height: 1px;
+  background: var(--separator);
+  margin: 4px 8px;
+}
+
+/* --- Submenu --- */
+.submenu {
+  display: none;
+  position: absolute;
+  top: -4px;
+  left: 100%;
+  background: var(--bg-menu);
+  border: var(--border);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: var(--backdrop-filter);
+  -webkit-backdrop-filter: var(--backdrop-filter);
+  padding: 4px 0;
+  min-width: 120px;
+}
+
+.menu-item.has-submenu:hover > .submenu,
+.submenu.visible {
+  display: block;
+}
+
+.submenu.flip-left {
+  left: auto;
+  right: 100%;
+}
