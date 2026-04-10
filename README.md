@@ -31,6 +31,8 @@
 
 **内置工具** - 设定时提醒、获取当前时间、生成图片（需独立配置图片 API），通过 function calling 自然调用。
 
+**双主题** - 像素风（Fusion Pixel 字体 + 方角）和简约风（系统字体 + 圆角 + 毛玻璃），一键切换。
+
 **深度自定义** - 6 套预设配色 + 自定义 8 色调色板、面板透明度、导入自定义角色、逐个动画替换。
 
 **隐私优先** - 所有数据本地存储，API Key 使用系统级加密（DPAPI），语义搜索模型完全离线运行，无遥测，无云存储。
@@ -199,6 +201,8 @@ pnpm run build
 **Memory System** - Three-tier memory: core memories (user preferences), chat logs, and archived conversation summaries. Built-in semantic search engine (offline multilingual model) for fuzzy matching across Chinese and English. Your pet truly remembers you.
 
 **Built-in Tools** - Set reminders, get current time, generate images (with separate image API), and express emotions through function calling.
+
+**Dual Themes** - Pixel theme (Fusion Pixel font + sharp corners) and Clean theme (system font + rounded corners + frosted glass), switchable with one click.
 
 **Full Customization** - 6 color presets + custom 8-color palette, adjustable panel transparency, custom character import, and per-animation sprite replacement.
 
