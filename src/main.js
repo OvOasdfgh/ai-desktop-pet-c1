@@ -8,6 +8,9 @@ const { AIManager } = require('./ai/ai-manager')
 const { createProvider } = require('./ai/provider')
 const { Marked } = require('marked')
 const hljs = require('highlight.js/lib/core')
+const { setModelPath, generateEmbedding, dispose: disposeEmbedding } = require('./memory/embedding')
+const { VectorStore } = require('./memory/vector-store')
+const vectorStore = new VectorStore()
 
 // Register highlight.js languages
 hljs.registerLanguage('javascript', require('highlight.js/lib/languages/javascript'))
@@ -49,10 +52,7 @@ const markedInstance = new Marked({
     image({ href, text }) {
       return `<img class="md-image" src="${escapeHtml(href)}" alt="${escapeHtml(text || '')}">`
     },
-    del({ text }) {
-      return '~' + text + '~'
-    },
-  },
+},
   breaks: true,
   gfm: true,
 })
@@ -77,7 +77,15 @@ let chatPanelOpen = false
 let chatIsMaximized = false
 let chatRestoreBounds = null
 let isDragging = false
+let isPetThrown = false
+let bubbleChatInputWindow = null
+let bubbleChatMode = false
+let lastInputAnchor = 'below'
 let alwaysOnTopInterval = null
+let bubbleMenuText = ''
+let isBubblePinned = false
+let bubbleAfterStream = false  // Panel closed during streaming → show bubble when stream ends
+let bubbleShownThisStream = false  // Dedup flag to avoid double-show within one stream
 let activityInterval = null
 let currentScale = 4
 let currentLang = 'en'
@@ -90,6 +98,10 @@ let lastFgProcessName = ''
 const selfProcessName = path.basename(process.execPath, '.exe').toLowerCase()
 let characterBounds = null
 const BUBBLE_MARGIN = 20
+let lastInputContentW = 200
+let lastInputContentH = 40
+let lastBubbleContentW = 300
+let lastBubbleContentH = 80
 
 // Character system
 let activeCharacterId = null       // null = built-in C1
@@ -142,6 +154,11 @@ function appendToChatLog(msg) {
   if (record.imageData) { record.hasImages = true; delete record.imageData }
   delete record.streaming
   fs.appendFileSync(filePath, JSON.stringify(record) + '\n')
+  // Async embedding generation (fire-and-forget)
+  const embText = `[${today}] ${msg.sender}: ${msg.content}`
+  generateEmbedding(embText).then(emb => {
+    if (emb) vectorStore.add('chat', `${today}:${msg.id || Date.now()}`, embText, emb)
+  }).catch(() => {})
 }
 
 function loadRecentChatHistory() {
@@ -155,12 +172,33 @@ function loadRecentChatHistory() {
   }).filter(Boolean)
 }
 
-function searchChatLogs(query, maxDays = 7) {
+function buildSearchTokens(query) {
+  const lower = query.toLowerCase().trim()
+  if (!lower) return []
+  const tokens = new Set()
+  tokens.add(lower)
+  for (const t of lower.split(/\s+/)) {
+    if (t.length >= 2) tokens.add(t)
+  }
+  const cjkRuns = lower.match(/[\u2e80-\u9fff\uf900-\ufaff]+/g)
+  if (cjkRuns) {
+    for (const run of cjkRuns) {
+      if (run.length >= 2) tokens.add(run)
+      for (let i = 0; i < run.length - 1; i++) {
+        tokens.add(run.slice(i, i + 2))
+      }
+    }
+  }
+  return [...tokens]
+}
+
+function searchChatLogs(query, maxDays = 30) {
   const chatDir = path.join(getMemoryBasePath(), 'chats')
   if (!fs.existsSync(chatDir)) return []
   const files = fs.readdirSync(chatDir).filter(f => f.endsWith('.jsonl')).sort().reverse().slice(0, maxDays)
   const results = []
-  const lowerQuery = query.toLowerCase()
+  const tokens = buildSearchTokens(query)
+  if (tokens.length === 0) return []
   for (const file of files) {
     const date = file.replace('.jsonl', '')
     const lines = fs.readFileSync(path.join(chatDir, file), 'utf-8').trim().split('\n')
@@ -168,9 +206,12 @@ function searchChatLogs(query, maxDays = 7) {
       if (!line) continue
       try {
         const msg = JSON.parse(line)
-        if (msg.content && msg.content.toLowerCase().includes(lowerQuery)) {
-          results.push({ date, sender: msg.sender, content: msg.content.slice(0, 200) })
-          if (results.length >= 5) return results
+        if (msg.content) {
+          const lower = msg.content.toLowerCase()
+          if (tokens.some(t => lower.includes(t))) {
+            results.push({ date, sender: msg.sender, content: msg.content.slice(0, 200) })
+            if (results.length >= 10) return results
+          }
         }
       } catch { /* skip malformed lines */ }
     }
@@ -182,19 +223,72 @@ function searchArchive(query) {
   const archivePath = path.join(getMemoryBasePath(), 'archive.jsonl')
   if (!fs.existsSync(archivePath)) return []
   const results = []
-  const lowerQuery = query.toLowerCase()
+  const tokens = buildSearchTokens(query)
+  if (tokens.length === 0) return []
   const lines = fs.readFileSync(archivePath, 'utf-8').trim().split('\n')
   for (const line of lines) {
     if (!line) continue
     try {
       const entry = JSON.parse(line)
-      if (entry.content && entry.content.toLowerCase().includes(lowerQuery)) {
-        results.push({ date: entry.date, content: entry.content.slice(0, 200) })
-        if (results.length >= 5) return results
+      if (entry.content) {
+        const lower = ((entry.date || '') + ' ' + entry.content).toLowerCase()
+        if (tokens.some(t => lower.includes(t))) {
+          results.push({ date: entry.date, content: entry.content.slice(0, 200) })
+          if (results.length >= 10) return results
+        }
       }
     } catch { /* skip */ }
   }
   return results
+}
+
+async function backfillVectors() {
+  if (vectorStore.vectors.length > 0) return
+  const yield_ = () => new Promise(r => setTimeout(r, 0))
+  let count = 0
+  // Core memory
+  const core = loadCoreMemory()
+  for (const e of core.entries) {
+    const text = `${e.key}: ${e.content}`
+    const emb = await generateEmbedding(text)
+    if (emb) vectorStore.add('core', e.key, text, emb)
+    if (++count % 5 === 0) await yield_()
+  }
+  // Archive
+  const archivePath = path.join(getMemoryBasePath(), 'archive.jsonl')
+  if (fs.existsSync(archivePath)) {
+    const lines = fs.readFileSync(archivePath, 'utf-8').trim().split('\n').filter(Boolean)
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line)
+        const text = `[${entry.date}] ${entry.content}`
+        const id = `${entry.date}:${entry.createdAt}`
+        const emb = await generateEmbedding(text)
+        if (emb) vectorStore.add('archive', id, text, emb)
+        if (++count % 5 === 0) await yield_()
+      } catch { /* skip */ }
+    }
+  }
+  // Chat logs (last 30 days)
+  const chatDir = path.join(getMemoryBasePath(), 'chats')
+  if (fs.existsSync(chatDir)) {
+    const files = fs.readdirSync(chatDir).filter(f => f.endsWith('.jsonl')).sort().reverse().slice(0, 30)
+    for (const file of files) {
+      const date = file.replace('.jsonl', '')
+      const lines = fs.readFileSync(path.join(chatDir, file), 'utf-8').trim().split('\n').filter(Boolean)
+      for (const line of lines) {
+        try {
+          const msg = JSON.parse(line)
+          if (msg.content) {
+            const text = `[${date}] ${msg.sender}: ${msg.content}`
+            const emb = await generateEmbedding(text)
+            if (emb) vectorStore.add('chat', `${date}:${msg.id || Date.now()}`, text, emb)
+            if (++count % 5 === 0) await yield_()
+          }
+        } catch { /* skip */ }
+      }
+    }
+  }
 }
 
 async function summarizeAndArchive(messagesToSummarize) {
@@ -215,6 +309,12 @@ async function summarizeAndArchive(messagesToSummarize) {
     const entry = { type: 'summary', date: getLocalDateString(), content: result, createdAt: Date.now() }
     const archivePath = path.join(ensureMemoryDir(), 'archive.jsonl')
     fs.appendFileSync(archivePath, JSON.stringify(entry) + '\n')
+    // Async embedding for archive summary
+    const archiveId = `${entry.date}:${entry.createdAt}`
+    const archiveEmbText = `[${entry.date}] ${result}`
+    generateEmbedding(archiveEmbText).then(emb => {
+      if (emb) vectorStore.add('archive', archiveId, archiveEmbText, emb)
+    }).catch(() => {})
   } catch { /* silent */ }
 }
 
@@ -253,14 +353,17 @@ function saveToolsSupport(key, supported) {
 }
 
 // --- i18n ---
+const _i18nCache = {}
 function loadI18n(lang) {
+  if (_i18nCache[lang]) return _i18nCache[lang]
   try {
     const filePath = path.join(__dirname, 'i18n', `${lang}.json`)
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    _i18nCache[lang] = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
   } catch {
     const fallback = path.join(__dirname, 'i18n', 'en.json')
-    return JSON.parse(fs.readFileSync(fallback, 'utf-8'))
+    _i18nCache[lang] = JSON.parse(fs.readFileSync(fallback, 'utf-8'))
   }
+  return _i18nCache[lang]
 }
 
 // --- Window size helpers ---
@@ -293,6 +396,12 @@ function startAlwaysOnTopInterval() {
   alwaysOnTopInterval = setInterval(() => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.setAlwaysOnTop(true, 'screen-saver')
+    }
+    if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+      bubbleWindow.setAlwaysOnTop(true, 'screen-saver')
+    }
+    if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+      bubbleChatInputWindow.setAlwaysOnTop(true, 'screen-saver')
     }
   }, 30000)
 }
@@ -466,21 +575,45 @@ function deriveAllColors(scheme, theme, opacity) {
   d['--bg-header'] = isPixel
     ? (op < 1 ? rgbaString(scheme.headerBg, Math.min(op + 0.05, 1)) : rgbString(scheme.headerBg))
     : rgbaString(scheme.headerBg, 0.6)
-  d['--bg-user-bubble'] = isPixel ? rgbString(scheme.userBubble) : rgbaString(scheme.userBubble, 0.9)
-  d['--bg-pet-bubble'] = isPixel ? rgbString(scheme.petBubble) : rgbaString(scheme.petBubble, 0.9)
-  d['--bg-bubble'] = isPixel ? rgbString(scheme.petBubble) : rgbaString(scheme.petBubble, 0.9)
-  d['--bg-menu'] = isPixel ? rgbString(scheme.petBubble) : rgbaString(scheme.petBubble, 0.95)
-  d['--bg-input'] = isPixel ? rgbString(inputBg) : rgbaString(inputBg, 0.8)
-  d['--bg-hover'] = isPixel ? rgbString(hoverBg) : rgbaString(hoverBg, 0.4)
-  d['--group-bg'] = isPixel ? rgbString(groupBg) : rgbaString(groupBg, 0.5)
+  d['--bg-user-bubble'] = isPixel
+    ? (op < 1 ? rgbaString(scheme.userBubble, op) : rgbString(scheme.userBubble))
+    : rgbaString(scheme.userBubble, op < 1 ? 0.9 * op : 0.9)
+  d['--bg-pet-bubble'] = isPixel
+    ? (op < 1 ? rgbaString(scheme.petBubble, op) : rgbString(scheme.petBubble))
+    : rgbaString(scheme.petBubble, op < 1 ? 0.9 * op : 0.9)
+  d['--bg-bubble'] = isPixel
+    ? (op < 1 ? rgbaString(scheme.petBubble, op) : rgbString(scheme.petBubble))
+    : rgbaString(scheme.petBubble, op < 1 ? 0.9 * op : 0.9)
+  d['--bg-menu'] = isPixel
+    ? (op < 1 ? rgbaString(scheme.petBubble, op) : rgbString(scheme.petBubble))
+    : rgbaString(scheme.petBubble, op < 1 ? 0.95 * op : 0.95)
+  d['--bg-input'] = isPixel
+    ? (op < 1 ? rgbaString(inputBg, op) : rgbString(inputBg))
+    : rgbaString(inputBg, op < 1 ? 0.8 * op : 0.8)
+  d['--bg-hover'] = isPixel
+    ? (op < 1 ? rgbaString(hoverBg, op) : rgbString(hoverBg))
+    : rgbaString(hoverBg, op < 1 ? 0.4 * op : 0.4)
+  d['--group-bg'] = isPixel
+    ? (op < 1 ? rgbaString(groupBg, op) : rgbString(groupBg))
+    : rgbaString(groupBg, op < 1 ? 0.5 * op : 0.5)
 
   // Accent
   d['--accent'] = rgbString(scheme.accent)
-  d['--send-bg'] = isPixel ? rgbString(sendBg) : rgbaString(sendBg, 0.9)
-  d['--send-hover'] = isPixel ? rgbString(scheme.accent) : rgbaString(scheme.accent, 0.9)
-  d['--close-hover'] = isPixel ? rgbString(closeHover) : rgbaString(closeHover, 0.6)
-  d['--toggle-bg-active'] = isPixel ? rgbString(scheme.accent) : rgbaString(scheme.accent, 0.9)
-  d['--toggle-bg'] = isPixel ? rgbString(toggleBg) : rgbaString(toggleBg, 0.5)
+  d['--send-bg'] = isPixel
+    ? (op < 1 ? rgbaString(sendBg, op) : rgbString(sendBg))
+    : rgbaString(sendBg, op < 1 ? 0.9 * op : 0.9)
+  d['--send-hover'] = isPixel
+    ? (op < 1 ? rgbaString(scheme.accent, op) : rgbString(scheme.accent))
+    : rgbaString(scheme.accent, op < 1 ? 0.9 * op : 0.9)
+  d['--close-hover'] = isPixel
+    ? (op < 1 ? rgbaString(closeHover, op) : rgbString(closeHover))
+    : rgbaString(closeHover, op < 1 ? 0.6 * op : 0.6)
+  d['--toggle-bg-active'] = isPixel
+    ? (op < 1 ? rgbaString(scheme.accent, op) : rgbString(scheme.accent))
+    : rgbaString(scheme.accent, op < 1 ? 0.9 * op : 0.9)
+  d['--toggle-bg'] = isPixel
+    ? (op < 1 ? rgbaString(toggleBg, op) : rgbString(toggleBg))
+    : rgbaString(toggleBg, op < 1 ? 0.5 * op : 0.5)
 
   // Borders
   d['--border'] = isPixel ? `2px solid ${rgbString(scheme.border)}` : `1px solid ${rgbaString(scheme.border, 0.3)}`
@@ -517,7 +650,7 @@ function getStorageSize() {
 }
 
 function broadcastToAll(channel, data) {
-  ;[mainWindow, chatWindow, bubbleWindow, settingsWindow, customizeWindow, memoryWindow, contextMenuWindow]
+  ;[mainWindow, chatWindow, bubbleWindow, settingsWindow, customizeWindow, memoryWindow, contextMenuWindow, bubbleChatInputWindow]
     .forEach(w => { if (w && !w.isDestroyed()) w.webContents.send(channel, data) })
 }
 
@@ -534,23 +667,9 @@ function applyColorSchemeToAll() {
 function setTheme(theme) {
   currentTheme = theme
   config.save({ theme })
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('set-theme', theme)
-  }
-  if (chatWindow && !chatWindow.isDestroyed()) {
-    chatWindow.webContents.send('set-theme', theme)
-  }
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.webContents.send('set-theme', theme)
-  }
-  if (customizeWindow && !customizeWindow.isDestroyed()) {
-    customizeWindow.webContents.send('set-theme', theme)
-  }
-  if (memoryWindow && !memoryWindow.isDestroyed()) {
-    memoryWindow.webContents.send('set-theme', theme)
-  }
-  // Re-derive color scheme (depends on theme)
+  // Apply color scheme BEFORE theme IPC — avoids "new theme + old colors" flash
   applyColorSchemeToAll()
+  broadcastToAll('set-theme', theme)
 }
 
 // --- Chat panel ---
@@ -660,6 +779,19 @@ function createChatWindow() {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('chat-panel-closed')
       }
+      // Show last message as bubble when panel closes
+      if (!bubbleChatMode) {
+        if (isAiStreaming) {
+          // Streaming in progress — defer to handleAiResponse end
+          bubbleAfterStream = true
+        } else {
+          const lastPet = chatHistory.filter(m => m.sender === 'pet' || m.sender === 'system').pop()
+          if (lastPet && !lastPet.bubbleRead && Date.now() - lastPet.timestamp < 60000) {
+            const preview = lastPet.content || ''
+            if (preview) showBubble(preview)
+          }
+        }
+      }
     }
   })
 
@@ -678,7 +810,7 @@ function createChatWindow() {
   chatWindow.on('restore', () => {
     chatWindow.setAlwaysOnTop(true, 'screen-saver')
     chatPanelOpen = true
-    closeBubbleWindow()
+    if (!bubbleChatMode) closeBubbleWindow()
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('chat-panel-opened')
     }
@@ -697,7 +829,7 @@ function createChatWindow() {
   })
 
   chatPanelOpen = true
-  closeBubbleWindow()
+  if (!bubbleChatMode) closeBubbleWindow()
 
   // Notify pet window
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1039,55 +1171,147 @@ function createMemoryWindow() {
 
 // --- Notification bubble window ---
 
-function getBubblePosition(contentW, contentH) {
+function getBubblePosition(contentW, contentH, inputAnchor) {
   const [petX, petY] = mainWindow.getPosition()
   const display = screen.getDisplayNearestPoint({ x: petX, y: petY })
   const wa = display.workArea
   const padding = 8
   const petSize = getWindowSize(currentScale)
-  const gapAbove = 40
+  const gapAbove = 20
   const gapBelow = 20
+  const gapSide = 10
   const hm = BUBBLE_MARGIN / 2
 
-  // Horizontal: center content on character center of mass
-  let x
+  let charTop, charBottom, centerX
   if (characterBounds) {
-    x = petX + padding + characterBounds.centerX * currentScale - contentW / 2
+    charTop = petY + padding + characterBounds.top * currentScale
+    charBottom = petY + padding + characterBounds.bottom * currentScale
+    centerX = petX + padding + characterBounds.centerX * currentScale
   } else {
-    x = petX + petSize.width / 2 - contentW / 2
+    charTop = petY
+    charBottom = petY + petSize.height
+    centerX = petX + petSize.width / 2
+  }
+  const petLeft = petX
+  const petRight = petX + petSize.width
+
+  let x, y
+
+  // Try above (preferred)
+  const aboveY = charTop - contentH - gapAbove
+  const aboveFits = aboveY - hm >= wa.y
+
+  // Try below
+  const belowY = charBottom + gapBelow
+  const belowFits = belowY + contentH + hm <= wa.y + wa.height
+
+  if (aboveFits && inputAnchor !== 'above') {
+    x = centerX - contentW / 2
+    y = aboveY
+  } else if (belowFits && inputAnchor !== 'below') {
+    x = centerX - contentW / 2
+    y = belowY
+  } else if (aboveFits) {
+    // inputAnchor is 'above' but only above fits — go left/right
+    const spaceRight = wa.x + wa.width - petRight
+    const spaceLeft = petLeft - wa.x
+    if (spaceRight >= spaceLeft) {
+      x = petRight + gapSide
+    } else {
+      x = petLeft - contentW - gapSide
+    }
+    const charCenterY = (charTop + charBottom) / 2
+    y = charCenterY - contentH / 2
+    y = Math.max(wa.y + hm, Math.min(y, wa.y + wa.height - contentH - hm))
+  } else if (belowFits) {
+    // inputAnchor is 'below' but only below fits — go left/right
+    const spaceRight = wa.x + wa.width - petRight
+    const spaceLeft = petLeft - wa.x
+    if (spaceRight >= spaceLeft) {
+      x = petRight + gapSide
+    } else {
+      x = petLeft - contentW - gapSide
+    }
+    const charCenterY = (charTop + charBottom) / 2
+    y = charCenterY - contentH / 2
+    y = Math.max(wa.y + hm, Math.min(y, wa.y + wa.height - contentH - hm))
+  } else {
+    // Neither above nor below fits — left/right
+    const spaceRight = wa.x + wa.width - petRight
+    const spaceLeft = petLeft - wa.x
+    if (spaceRight >= spaceLeft) {
+      x = petRight + gapSide
+    } else {
+      x = petLeft - contentW - gapSide
+    }
+    const charCenterY = (charTop + charBottom) / 2
+    y = charCenterY - contentH / 2
+    y = Math.max(wa.y + hm, Math.min(y, wa.y + wa.height - contentH - hm))
   }
 
-  // Vertical: position content edge at gap distance from character
-  let y
-  if (characterBounds) {
-    const charTop = petY + padding + characterBounds.top * currentScale
-    const charBottom = petY + padding + characterBounds.bottom * currentScale
-    y = charTop - contentH - gapAbove
-    if (y - hm < wa.y) {
-      y = charBottom + gapBelow
-    }
-  } else {
-    y = petY - contentH - gapAbove
-    if (y - hm < wa.y) {
-      y = petY + petSize.height + gapBelow
-    }
-  }
-
-  // Clamp: ensure window (content ± halfMargin) stays in workArea
   x = Math.max(wa.x + hm, Math.min(x, wa.x + wa.width - contentW - hm))
 
   return { x: Math.round(x), y: Math.round(y) }
 }
 
-function showBubble(text) {
-  // Close existing bubble
-  closeBubbleWindow()
+// --- Bubble chat input positioning (below → above → left/right) ---
+function getInputPosition(contentW, contentH) {
+  const [petX, petY] = mainWindow.getPosition()
+  const display = screen.getDisplayNearestPoint({ x: petX, y: petY })
+  const wa = display.workArea
+  const padding = 8
+  const petSize = getWindowSize(currentScale)
+  const gapAbove = 20
+  const gapBelow = 20
+  const hm = BUBBLE_MARGIN / 2
 
+  let charTop, charBottom, centerX
+  if (characterBounds) {
+    charTop = petY + padding + characterBounds.top * currentScale
+    charBottom = petY + padding + characterBounds.bottom * currentScale
+    centerX = petX + padding + characterBounds.centerX * currentScale
+  } else {
+    charTop = petY
+    charBottom = petY + petSize.height
+    centerX = petX + petSize.width / 2
+  }
+
+  let x, y, anchor
+
+  // 1. Try below (preferred)
+  const belowY = charBottom + gapBelow
+  if (belowY + contentH + hm <= wa.y + wa.height) {
+    x = centerX - contentW / 2
+    y = belowY
+    anchor = 'below'
+  } else {
+    // 2. Try above
+    const aboveY = charTop - contentH - gapAbove
+    x = centerX - contentW / 2
+    y = aboveY
+    anchor = 'above'
+  }
+
+  // Clamp to workArea
+  x = Math.max(wa.x + hm, Math.min(x, wa.x + wa.width - contentW - hm))
+  y = Math.max(wa.y + hm, Math.min(y, wa.y + wa.height - contentH - hm))
+
+  return { x: Math.round(x), y: Math.round(y), anchor }
+}
+
+// --- Unified persistent bubble window ---
+let bubbleReady = false
+let pendingBubbleSend = null
+let pendingBubbleError = null
+
+function ensureBubbleWindow() {
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) return
   if (!mainWindow || mainWindow.isDestroyed()) return
 
+  bubbleReady = false
   bubbleWindow = new BrowserWindow({
-    width: 250,
-    height: 80,
+    width: 300 + BUBBLE_MARGIN,
+    height: 80 + BUBBLE_MARGIN,
     show: false,
     frame: false,
     transparent: true,
@@ -1106,27 +1330,189 @@ function showBubble(text) {
 
   bubbleWindow.setAlwaysOnTop(true, 'screen-saver')
   bubbleWindow.setIgnoreMouseEvents(true, { forward: true })
-
   bubbleWindow.loadFile(path.join(__dirname, 'renderer', 'bubble', 'bubble.html'))
 
   bubbleWindow.webContents.on('did-finish-load', () => {
     if (bubbleWindow && !bubbleWindow.isDestroyed()) {
       const cfg = config.load()
+      bubbleWindow.webContents.send('set-theme', currentTheme)
       bubbleWindow.webContents.send('apply-color-scheme', { derived: deriveAllColors(cfg.colorScheme || DEFAULT_COLOR_SCHEME, currentTheme, cfg.panelOpacity) })
-      bubbleWindow.webContents.send('show-bubble', { text, theme: currentTheme })
+      bubbleWindow.webContents.send('bubble-set-mode', bubbleChatMode ? 'chat' : 'notification')
+      bubbleReady = true
+      if (pendingBubbleSend) {
+        bubbleWindow.webContents.send('show-bubble', pendingBubbleSend)
+        pendingBubbleSend = null
+      }
+      if (pendingBubbleError) {
+        bubbleWindow.webContents.send('bubble-stream-start', null)
+        bubbleWindow.webContents.send('bubble-stream-error', pendingBubbleError)
+        bubbleWindow.showInactive()
+        pendingBubbleError = null
+      }
+      // If streaming is in progress, replay stream-start so bubble shows typing dots
+      const lastPet = chatHistory.filter(m => m.sender === 'pet').pop()
+      if (lastPet && lastPet.streaming) {
+        bubbleWindow.webContents.send('bubble-stream-start', lastPet.id)
+        bubbleWindow.showInactive()
+      }
     }
   })
 
   bubbleWindow.on('closed', () => {
     bubbleWindow = null
+    bubbleReady = false
   })
+}
+
+// --- Bubble chat input window ---
+function createBubbleChatInputWindow() {
+  if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) return
+  if (!mainWindow || mainWindow.isDestroyed()) return
+
+  const defaultW = 200
+  const defaultH = 40
+
+  bubbleChatInputWindow = new BrowserWindow({
+    width: defaultW + BUBBLE_MARGIN,
+    height: defaultH + BUBBLE_MARGIN,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    focusable: true,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'bubble-chat-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  bubbleChatInputWindow.setAlwaysOnTop(true, 'screen-saver')
+  bubbleChatInputWindow.loadFile(path.join(__dirname, 'renderer', 'bubble-chat', 'bubble-chat-input.html'))
+
+  bubbleChatInputWindow.webContents.on('did-finish-load', () => {
+    if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+      const cfg = config.load()
+      const i18nData = loadI18n(currentLang)
+      bubbleChatInputWindow.webContents.send('bci-init', {
+        theme: currentTheme,
+        placeholder: i18nData.chat?.placeholder || 'Type a message...',
+      })
+      bubbleChatInputWindow.webContents.send('apply-color-scheme', {
+        derived: deriveAllColors(cfg.colorScheme || DEFAULT_COLOR_SCHEME, currentTheme, cfg.panelOpacity)
+      })
+      bubbleChatInputWindow.webContents.send('bci-scale-changed', currentScale)
+      const pos = getInputPosition(defaultW, defaultH)
+      lastInputAnchor = pos.anchor || 'below'
+      const hm = BUBBLE_MARGIN / 2
+      bubbleChatInputWindow.setBounds({
+        x: pos.x - hm, y: pos.y - hm,
+        width: defaultW + BUBBLE_MARGIN, height: defaultH + BUBBLE_MARGIN,
+      })
+      bubbleChatInputWindow.showInactive()
+    }
+  })
+
+  bubbleChatInputWindow.on('blur', () => {
+    if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+      bubbleChatInputWindow.setAlwaysOnTop(true, 'screen-saver')
+    }
+  })
+
+  bubbleChatInputWindow.on('closed', () => {
+    bubbleChatInputWindow = null
+  })
+}
+
+function closeBubbleChatInputWindow() {
+  if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+    bubbleChatInputWindow.close()
+    bubbleChatInputWindow = null
+  }
+}
+
+function toggleBubbleChatMode(enabled) {
+  bubbleChatMode = enabled
+  config.save({ bubbleChatMode: enabled })
+
+  if (enabled) {
+    ensureBubbleWindow()
+    if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+      bubbleWindow.webContents.send('bubble-set-mode', 'chat')
+    }
+    createBubbleChatInputWindow()
+  } else {
+    if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+      bubbleWindow.webContents.send('bubble-set-mode', 'notification')
+      bubbleWindow.webContents.send('bubble-stream-end')
+    }
+    closeBubbleChatInputWindow()
+    closeBubbleWindow()
+  }
+}
+
+function repositionBubbleChatWindows() {
+  if (!bubbleChatMode) return
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const hm = BUBBLE_MARGIN / 2
+
+  if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+    const pos = getInputPosition(lastInputContentW, lastInputContentH)
+    lastInputAnchor = pos.anchor || 'below'
+    bubbleChatInputWindow.setBounds({ x: pos.x - hm, y: pos.y - hm, width: lastInputContentW + BUBBLE_MARGIN, height: lastInputContentH + BUBBLE_MARGIN })
+    if (!bubbleChatInputWindow.isVisible()) bubbleChatInputWindow.showInactive()
+  }
+
+  if (bubbleWindow && !bubbleWindow.isDestroyed() && bubbleWindow.isVisible()) {
+    const pos = getBubblePosition(lastBubbleContentW, lastBubbleContentH, lastInputAnchor)
+    bubbleWindow.setBounds({ x: pos.x - hm, y: pos.y - hm, width: lastBubbleContentW + BUBBLE_MARGIN, height: lastBubbleContentH + BUBBLE_MARGIN })
+  }
+}
+
+function repositionVisibleBubble() {
+  if (!bubbleWindow || bubbleWindow.isDestroyed() || !bubbleWindow.isVisible()) return
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (!lastBubbleContentW || !lastBubbleContentH) return
+  const hm = BUBBLE_MARGIN / 2
+  const pos = getBubblePosition(lastBubbleContentW, lastBubbleContentH)
+  bubbleWindow.setBounds({
+    x: pos.x - hm, y: pos.y - hm,
+    width: lastBubbleContentW + BUBBLE_MARGIN,
+    height: lastBubbleContentH + BUBBLE_MARGIN
+  })
+}
+
+function showBubble(text, type = 'notification') {
+  isBubblePinned = false
+  ensureBubbleWindow()
+  if (!bubbleWindow || bubbleWindow.isDestroyed()) return
+
+  const payload = { text, theme: currentTheme, type }
+  if (bubbleReady) {
+    bubbleWindow.webContents.send('show-bubble', payload)
+  } else {
+    pendingBubbleSend = payload
+  }
+}
+
+function sendBubbleStreamError(text) {
+  if (bubbleReady && bubbleWindow && !bubbleWindow.isDestroyed()) {
+    bubbleWindow.webContents.send('bubble-stream-error', text)
+  } else {
+    pendingBubbleError = text
+  }
 }
 
 function closeBubbleWindow() {
   if (bubbleWindow && !bubbleWindow.isDestroyed()) {
-    bubbleWindow.close()
-    bubbleWindow = null
+    bubbleWindow.destroy()
   }
+  bubbleWindow = null
+  bubbleReady = false
 }
 
 
@@ -1180,6 +1566,7 @@ function showHtmlContextMenu(cursorX, cursorY) {
 
   const items = [
     { id: 'chat', label: t.chat, type: 'normal' },
+    { id: 'bubble-chat', label: t.bubbleChat, type: 'checkbox', checked: bubbleChatMode },
     { id: 'settings', label: t.settings, type: 'normal' },
     { id: 'customize', label: t.customize, type: 'normal' },
     { id: 'memory', label: t.memory, type: 'normal' },
@@ -1237,9 +1624,66 @@ function showHtmlContextMenu(cursorX, cursorY) {
   contextMenuWindow.on('closed', () => { contextMenuWindow = null })
 }
 
+function showBubbleContextMenu(x, y) {
+  closeContextMenu()
+
+  const i18n = loadI18n(currentLang)
+  const t = i18n.bubble || {}
+
+  const items = []
+  if (bubbleMenuText) {
+    items.push({ id: 'bubble-copy', label: t.copy || 'Copy', type: 'normal' })
+    items.push({ type: 'separator' })
+  }
+  items.push({ id: 'bubble-open-chat', label: t.openChat || 'Open Chat', type: 'normal' })
+  items.push({ id: 'bubble-hide', label: t.hideBubble || 'Hide', type: 'normal' })
+  items.push({
+    id: 'bubble-pin',
+    label: isBubblePinned ? (t.unpin || 'Unpin') : (t.pin || 'Pin'),
+    type: 'normal',
+  })
+
+  contextMenuWindow = new BrowserWindow({
+    width: 200,
+    height: 100,
+    x,
+    y,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    hasShadow: false,
+    focusable: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'context-menu-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  contextMenuWindow.setAlwaysOnTop(true, 'screen-saver')
+  contextMenuWindow.loadFile(path.join(__dirname, 'renderer', 'context-menu', 'context-menu.html'))
+
+  contextMenuWindow.webContents.on('did-finish-load', () => {
+    if (contextMenuWindow && !contextMenuWindow.isDestroyed()) {
+      contextMenuWindow.webContents.send('init-context-menu', { items, theme: currentTheme })
+      const cfg = config.load()
+      contextMenuWindow.webContents.send('apply-color-scheme', {
+        derived: deriveAllColors(cfg.colorScheme || DEFAULT_COLOR_SCHEME, currentTheme, cfg.panelOpacity),
+      })
+    }
+  })
+
+  contextMenuWindow.on('closed', () => { contextMenuWindow = null })
+}
+
 function handleMenuAction(id) {
   const processName = contextMenuProcessName
   if (id === 'chat') toggleChatWindow()
+  else if (id === 'bubble-chat') toggleBubbleChatMode(!bubbleChatMode)
   else if (id === 'settings') createSettingsWindow()
   else if (id === 'customize') createCustomizeWindow()
   else if (id === 'memory') createMemoryWindow()
@@ -1253,6 +1697,19 @@ function handleMenuAction(id) {
   else if (id === 'tag-remove') tagAppToCategory(processName, null)
   else if (id.startsWith('tag-')) tagAppToCategory(processName, id.slice(4))
   else if (id === 'exit') app.quit()
+  else if (id === 'bubble-copy') {
+    if (bubbleMenuText) clipboard.writeText(bubbleMenuText)
+  }
+  else if (id === 'bubble-open-chat') toggleChatWindow()
+  else if (id === 'bubble-hide') {
+    closeBubbleWindow()
+  }
+  else if (id === 'bubble-pin') {
+    isBubblePinned = !isBubblePinned
+    if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+      bubbleWindow.webContents.send('bubble-pin-changed', isBubblePinned)
+    }
+  }
 }
 
 function setScale(scale) {
@@ -1278,6 +1735,11 @@ function setScale(scale) {
 
   config.save({ displayScale: scale, windowX: cx, windowY: cy })
   mainWindow.webContents.send('display-scale-changed', scale)
+  if (bubbleChatMode) repositionBubbleChatWindows()
+  else repositionVisibleBubble()
+  if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+    bubbleChatInputWindow.webContents.send('bci-scale-changed', scale)
+  }
 }
 
 function setLanguage(lang) {
@@ -1294,6 +1756,12 @@ function setLanguage(lang) {
   }
   if (memoryWindow && !memoryWindow.isDestroyed()) {
     memoryWindow.webContents.send('set-language', lang)
+  }
+  if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+    const i18nData = loadI18n(lang)
+    bubbleChatInputWindow.webContents.send('set-language', {
+      placeholder: i18nData.chat?.placeholder || 'Type a message...',
+    })
   }
 }
 
@@ -1403,6 +1871,11 @@ ipcMain.on('move-window', (event, dx, dy) => {
     const size = getWindowSize(currentScale)
     const [cx, cy] = clampToScreen(wx + dx, wy + dy, size.width, size.height)
     mainWindow.setPosition(cx, cy)
+    if (bubbleChatMode) {
+      repositionBubbleChatWindows()
+    } else {
+      repositionVisibleBubble()
+    }
   }
 })
 
@@ -1426,10 +1899,13 @@ ipcMain.on('set-dragging', (event, dragging) => {
     if (dragging) {
       stopAlwaysOnTopInterval()
       mainWindow.setIgnoreMouseEvents(false)
-      closeBubbleWindow()
     } else {
       startAlwaysOnTopInterval()
       mainWindow.setIgnoreMouseEvents(true, { forward: true })
+      if (!isPetThrown) {
+        if (bubbleChatMode) repositionBubbleChatWindows()
+        else repositionVisibleBubble()
+      }
     }
   }
 })
@@ -1469,6 +1945,7 @@ ipcMain.on('context-menu-resize', (event, w, h) => {
   contextMenuWindow.setBounds({ x, y, width: w, height: h })
   contextMenuWindow.show()
   contextMenuWindow.focus()
+  contextMenuWindow.moveTop()
 })
 
 ipcMain.on('context-menu-action', (event, id) => {
@@ -1540,6 +2017,18 @@ ipcMain.on('chat-minimize', () => {
     chatPanelOpen = false
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('chat-panel-closed')
+    }
+    // Show last message as bubble when panel minimizes
+    if (!bubbleChatMode) {
+      if (isAiStreaming) {
+        bubbleAfterStream = true
+      } else {
+        const lastPet = chatHistory.filter(m => m.sender === 'pet' || m.sender === 'system').pop()
+        if (lastPet && !lastPet.bubbleRead && Date.now() - lastPet.timestamp < 60000) {
+          const preview = lastPet.content || ''
+          if (preview) showBubble(preview)
+        }
+      }
     }
   }
 })
@@ -1694,7 +2183,7 @@ async function triggerReminder(id) {
   }
   // Show bubble unconditionally
   const preview = reminder.message.length > 30 ? reminder.message.slice(0, 30) + '...' : reminder.message
-  showBubble(`⏰ ${preview}`)
+  showBubble(`⏰ ${preview}`, 'reminder')
 }
 
 registerTool('get_current_time', 'Get the current date and time', {
@@ -1847,6 +2336,10 @@ function registerMemoryTools() {
         core.entries.push({ key: args.key, content: args.content, createdAt: now, updatedAt: now })
       }
       saveCoreMemory(core)
+      const coreEmbText = `${args.key}: ${args.content}`
+      generateEmbedding(coreEmbText).then(emb => {
+        if (emb) { vectorStore.removeBySource('core', args.key); vectorStore.add('core', args.key, coreEmbText, emb) }
+      }).catch(() => {})
       return { success: true, count: core.entries.length, limit: 30 }
     })
 
@@ -1862,19 +2355,30 @@ function registerMemoryTools() {
       if (idx < 0) return { error: `Memory key "${args.key}" not found`, count: core.entries.length }
       core.entries.splice(idx, 1)
       saveCoreMemory(core)
+      vectorStore.removeBySource('core', args.key)
       return { success: true, deleted_key: args.key, count: core.entries.length }
     })
 
     registerTool('search_memory', 'Search past conversations and archived memories. Use when the user references something from a previous conversation.', {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Keywords to search for.' },
+        query: { type: 'string', description: 'Search query (natural language or keywords).' },
       },
       required: ['query'],
-    }, (args) => {
+    }, async (args) => {
+      // Layer 1: Semantic search (may fail silently)
+      let semanticResults = []
+      try {
+        const queryEmbedding = await generateEmbedding(args.query)
+        if (queryEmbedding) {
+          semanticResults = vectorStore.search(queryEmbedding, 10)
+            .map(r => ({ source: r.source, text: r.text, score: Math.round(r.score * 100) / 100 }))
+        }
+      } catch { /* fallback to keyword only */ }
+      // Layer 2: Keyword search (always runs)
       const archiveResults = searchArchive(args.query)
       const chatResults = searchChatLogs(args.query)
-      return { archive_results: archiveResults, chat_results: chatResults }
+      return { semantic_results: semanticResults, archive_results: archiveResults, chat_results: chatResults }
     })
   } else {
     toolRegistry.delete('update_memory')
@@ -1929,6 +2433,16 @@ async function handleAiResponse() {
   if (isAiStreaming) return
   isAiStreaming = true
   userStoppedStreaming = false
+  bubbleAfterStream = false
+  bubbleShownThisStream = false
+
+  // Immediately switch send button to stop mode (don't wait for reading animation)
+  if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+    bubbleChatInputWindow.webContents.send('bci-streaming-changed', true)
+  }
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    chatWindow.webContents.send('chat-streaming-changed', true)
+  }
 
   // --- Tools support auto-detection ---
   const cacheKey = `${settings.apiEndpoint}|${settings.modelName}`
@@ -1993,6 +2507,9 @@ async function handleAiResponse() {
           if (chatWindow && !chatWindow.isDestroyed()) {
             chatWindow.webContents.send('ai-stream-chunk', chunk.content)
           }
+          if (bubbleChatMode && bubbleWindow && !bubbleWindow.isDestroyed()) {
+            bubbleWindow.webContents.send('bubble-stream-chunk', chunk.content)
+          }
           break
 
         case 'tool_call':
@@ -2033,6 +2550,17 @@ async function handleAiResponse() {
   if (chatWindow && !chatWindow.isDestroyed()) {
     chatWindow.webContents.send('ai-stream-start', currentPetMsg.id)
   }
+  if (bubbleChatMode) {
+    isBubblePinned = false
+    ensureBubbleWindow()
+    if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+      bubbleWindow.webContents.send('bubble-stream-start', currentPetMsg.id)
+      bubbleWindow.showInactive()
+    }
+    if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+      bubbleChatInputWindow.webContents.send('bci-streaming-changed', true)
+    }
+  }
 
   let hasError = false
 
@@ -2047,6 +2575,9 @@ async function handleAiResponse() {
       // Clean up first streaming bubble before retry
       if (chatWindow && !chatWindow.isDestroyed()) {
         chatWindow.webContents.send('ai-stream-end')
+      }
+      if (bubbleChatMode && bubbleWindow && !bubbleWindow.isDestroyed()) {
+        bubbleWindow.webContents.send('bubble-stream-end')
       }
       // Remove the empty placeholder
       const idx = chatHistory.indexOf(currentPetMsg)
@@ -2065,6 +2596,11 @@ async function handleAiResponse() {
       if (chatWindow && !chatWindow.isDestroyed()) {
         chatWindow.webContents.send('ai-stream-start', currentPetMsg.id)
       }
+      if (bubbleChatMode && bubbleWindow && !bubbleWindow.isDestroyed()) {
+        isBubblePinned = false
+        bubbleWindow.webContents.send('bubble-stream-start', currentPetMsg.id)
+        bubbleWindow.showInactive()
+      }
       // Reset confused timer
       confusedTimer = setTimeout(() => { sendAnimationState('confused') }, confusedTimeout)
       sendAnimationState('thinking')
@@ -2079,6 +2615,8 @@ async function handleAiResponse() {
       if (chatWindow && !chatWindow.isDestroyed()) {
         chatWindow.webContents.send('ai-stream-error', result.errorContent)
       }
+      if (bubbleChatMode) sendBubbleStreamError(result.errorContent)
+      if (!chatPanelOpen && !bubbleChatMode) { showBubble(result.errorContent); bubbleShownThisStream = true }
     }
 
     // Tool execution loop
@@ -2156,6 +2694,11 @@ async function handleAiResponse() {
       if (prevImages) currentPetMsg.images = prevImages
       chatHistory.push(currentPetMsg)
 
+      // Notify chat panel of new streaming message (tool loop creates new msg)
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        chatWindow.webContents.send('ai-stream-start', currentPetMsg.id)
+      }
+
       // Keep thinking animation, reset confused timer
       sendAnimationState('thinking')
       confusedTimer = setTimeout(() => { sendAnimationState('confused') }, confusedTimeout)
@@ -2170,6 +2713,8 @@ async function handleAiResponse() {
         if (chatWindow && !chatWindow.isDestroyed()) {
           chatWindow.webContents.send('ai-stream-error', result.errorContent)
         }
+        if (bubbleChatMode) sendBubbleStreamError(result.errorContent)
+        if (!chatPanelOpen && !bubbleChatMode) { showBubble(result.errorContent); bubbleShownThisStream = true }
       }
     }
 
@@ -2189,6 +2734,8 @@ async function handleAiResponse() {
       if (chatWindow && !chatWindow.isDestroyed()) {
         chatWindow.webContents.send('ai-stream-error', errMsg)
       }
+      if (bubbleChatMode) sendBubbleStreamError(errMsg)
+      if (!chatPanelOpen && !bubbleChatMode) { showBubble(errMsg); bubbleShownThisStream = true }
     }
   }
 
@@ -2207,8 +2754,8 @@ async function handleAiResponse() {
       chatWindow.webContents.send('ai-stream-images', currentPetMsg.images)
     }
 
-    // Show bubble if chat panel is closed
-    if (!chatPanelOpen) {
+    // Show bubble if chat panel is closed (skip in bubble-chat mode — handled separately)
+    if (!chatPanelOpen && !bubbleChatMode) {
       let preview = currentPetMsg.content
       const hadMarkdownImages = preview && /!\[.*?\]\(.*?\)/.test(preview)
       if (preview) preview = preview.replace(/!\[.*?\]\(.*?\)/g, '').trim()
@@ -2217,15 +2764,13 @@ async function handleAiResponse() {
         preview = i18nData.system?.imageLabel || '[Image]'
       }
       if (preview) {
-        preview = preview.length > 30 ? preview.slice(0, 30) + '...' : preview
         showBubble(preview)
+        bubbleShownThisStream = true
       }
     }
   } else if (!hasError && !hasContent && !userStoppedStreaming) {
     // Stream ended with no content — connection lost
-    const idx = chatHistory.indexOf(currentPetMsg)
-    if (idx !== -1) chatHistory.splice(idx, 1)
-
+    hasError = true
     const i18n = loadI18n(currentLang)
     const lostText = i18n.system?.connectionLost || 'Connection lost'
     addSystemMessage(lostText, true)
@@ -2233,6 +2778,11 @@ async function handleAiResponse() {
     if (chatWindow && !chatWindow.isDestroyed()) {
       chatWindow.webContents.send('ai-stream-error', lostText)
     }
+    if (bubbleChatMode) sendBubbleStreamError(lostText)
+    if (!chatPanelOpen && !bubbleChatMode) { showBubble(lostText); bubbleShownThisStream = true }
+    // Remove empty placeholder after bubble IPC sent
+    const idx = chatHistory.indexOf(currentPetMsg)
+    if (idx !== -1) chatHistory.splice(idx, 1)
   } else {
     // Error or user stopped with no content — remove empty placeholder
     if (!currentPetMsg.content && !currentPetMsg.thinkingContent) {
@@ -2244,18 +2794,36 @@ async function handleAiResponse() {
   }
 
   // Return to idle (or play emotion animation first)
-  if (!hasError) {
-    if (pendingEmotion) {
-      sendAnimationState(pendingEmotion)
-      pendingEmotion = null
-    } else {
-      sendAnimationState('idle')
-    }
+  // Skip idle on error path — let error animation play out naturally,
+  // StateMachine _onReturnToIdle will restore idle after animation completes.
+  if (pendingEmotion) {
+    sendAnimationState(pendingEmotion)
+    pendingEmotion = null
+  } else if (!hasError) {
+    sendAnimationState('idle')
   }
 
   // Notify chat panel that streaming ended
   if (chatWindow && !chatWindow.isDestroyed()) {
     chatWindow.webContents.send('ai-stream-end')
+  }
+  if (bubbleChatMode && bubbleWindow && !bubbleWindow.isDestroyed()) {
+    // If only images (no text), send [Image] label so bubble shows something instead of dots
+    if (hasImages && !currentPetMsg.content.trim()) {
+      const i18nData = loadI18n(currentLang)
+      const label = i18nData.system?.imageLabel || '[Image]'
+      bubbleWindow.webContents.send('bubble-stream-chunk', label)
+    }
+    if (hasImages) {
+      bubbleWindow.webContents.send('bubble-has-images')
+    }
+    bubbleWindow.webContents.send('bubble-stream-end')
+  }
+  if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+    bubbleChatInputWindow.webContents.send('bci-streaming-changed', false)
+  }
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    chatWindow.webContents.send('chat-streaming-changed', false)
   }
 
   // Persist finalized AI message to chat log
@@ -2263,6 +2831,15 @@ async function handleAiResponse() {
     appendToChatLog(currentPetMsg)
   }
 
+  // #3: panel was closed during streaming → show bubble now if nothing else did
+  if (bubbleAfterStream && !bubbleChatMode && !chatPanelOpen && !bubbleShownThisStream) {
+    const lastPet = chatHistory.filter(m => m.sender === 'pet' || m.sender === 'system').pop()
+    if (lastPet) {
+      let preview = lastPet.content || ''
+      if (preview) showBubble(preview)
+    }
+  }
+  bubbleAfterStream = false
   isAiStreaming = false
 }
 
@@ -2346,8 +2923,7 @@ async function generateProactiveMessage() {
       chatWindow.webContents.send('chat-new-message', petMsg)
     }
     // Show bubble unconditionally
-    const preview = text.length > 30 ? text.slice(0, 30) + '...' : text
-    showBubble(preview)
+    showBubble(text, 'proactive')
   } finally {
     isProactiveMessagePending = false
   }
@@ -2393,6 +2969,8 @@ function pickProactivePreset(i18n) {
 
 // --- Bubble IPC ---
 ipcMain.on('bubble-clicked', () => {
+  const lastMsg = chatHistory.filter(m => m.sender === 'pet' || m.sender === 'system').pop()
+  if (lastMsg) lastMsg.bubbleRead = true
   closeBubbleWindow()
   if (chatWindow && !chatWindow.isDestroyed()) {
     if (chatWindow.isMinimized()) chatWindow.restore()
@@ -2410,10 +2988,17 @@ ipcMain.on('bubble-faded', () => {
 ipcMain.on('bubble-resize', (event, w, h) => {
   if (!bubbleWindow || bubbleWindow.isDestroyed()) return
   if (!mainWindow || mainWindow.isDestroyed()) return
+  lastBubbleContentW = w
+  lastBubbleContentH = h
   const hm = BUBBLE_MARGIN / 2
-  const pos = getBubblePosition(w, h)
+  const anchor = bubbleChatMode ? lastInputAnchor : undefined
+  const pos = getBubblePosition(w, h, anchor)
   bubbleWindow.setBounds({ x: pos.x - hm, y: pos.y - hm, width: w + BUBBLE_MARGIN, height: h + BUBBLE_MARGIN })
   bubbleWindow.showInactive()
+  // Notification bubbles must be immediately clickable (opens chat panel)
+  if (!bubbleChatMode) {
+    bubbleWindow.setIgnoreMouseEvents(false)
+  }
 })
 
 ipcMain.on('bubble-ignore-mouse', (event, ignore) => {
@@ -2422,8 +3007,84 @@ ipcMain.on('bubble-ignore-mouse', (event, ignore) => {
   }
 })
 
+ipcMain.on('show-bubble-menu', (event, x, y, text) => {
+  bubbleMenuText = text || ''
+  showBubbleContextMenu(x, y)
+})
+
+
 ipcMain.on('character-bounds', (event, bounds) => {
   characterBounds = bounds
+  if (bubbleChatMode) {
+    repositionBubbleChatWindows()
+  } else if (bubbleWindow && !bubbleWindow.isDestroyed() && bubbleWindow.isVisible()
+             && lastBubbleContentW && lastBubbleContentH) {
+    const hm = BUBBLE_MARGIN / 2
+    const pos = getBubblePosition(lastBubbleContentW, lastBubbleContentH)
+    bubbleWindow.setBounds({
+      x: pos.x - hm, y: pos.y - hm,
+      width: lastBubbleContentW + BUBBLE_MARGIN,
+      height: lastBubbleContentH + BUBBLE_MARGIN
+    })
+  }
+})
+
+// --- Bubble chat mode IPC ---
+ipcMain.on('bubble-chat-send', (event, text) => {
+  if (!text || !text.trim()) return
+  const msg = {
+    id: ++chatMessageIdCounter,
+    type: 'text',
+    sender: 'user',
+    content: text.trim(),
+    timestamp: Date.now(),
+  }
+  chatHistory.push(msg)
+  appendToChatLog(msg)
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    chatWindow.webContents.send('chat-new-message', msg)
+  }
+  handleAiResponse()
+})
+
+ipcMain.on('bci-resize', (event, w, h) => {
+  if (!bubbleChatInputWindow || bubbleChatInputWindow.isDestroyed()) return
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  lastInputContentW = w
+  lastInputContentH = h
+  const hm = BUBBLE_MARGIN / 2
+  const pos = getInputPosition(w, h)
+  lastInputAnchor = pos.anchor || 'below'
+  bubbleChatInputWindow.setBounds({
+    x: pos.x - hm, y: pos.y - hm,
+    width: w + BUBBLE_MARGIN, height: h + BUBBLE_MARGIN,
+  })
+})
+
+ipcMain.on('pet-thrown', () => {
+  isPetThrown = true
+  if (bubbleChatInputWindow && !bubbleChatInputWindow.isDestroyed()) {
+    bubbleChatInputWindow.hide()
+  }
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+    bubbleWindow.hide()
+  }
+})
+
+ipcMain.on('thrown-landed', () => {
+  isPetThrown = false
+  if (bubbleChatMode) {
+    repositionBubbleChatWindows()
+    // Restore bubble hidden during throw if it has content
+    if (bubbleWindow && !bubbleWindow.isDestroyed() && !bubbleWindow.isVisible() && lastBubbleContentW && lastBubbleContentH) {
+      const hm = BUBBLE_MARGIN / 2
+      const pos = getBubblePosition(lastBubbleContentW, lastBubbleContentH, lastInputAnchor)
+      bubbleWindow.setBounds({ x: pos.x - hm, y: pos.y - hm, width: lastBubbleContentW + BUBBLE_MARGIN, height: lastBubbleContentH + BUBBLE_MARGIN })
+      bubbleWindow.showInactive()
+    }
+  } else {
+    repositionVisibleBubble()
+  }
 })
 
 // --- Settings IPC ---
@@ -2438,6 +3099,7 @@ ipcMain.handle('delete-core-memory', (_, key) => {
   const core = loadCoreMemory()
   core.entries = core.entries.filter(e => e.key !== key)
   saveCoreMemory(core)
+  vectorStore.removeBySource('core', key)
   return { entries: core.entries }
 })
 
@@ -2448,6 +3110,10 @@ ipcMain.handle('edit-core-memory', (_, key, content) => {
     entry.content = content
     entry.updatedAt = Date.now()
     saveCoreMemory(core)
+    const editEmbText = `${key}: ${content}`
+    generateEmbedding(editEmbText).then(emb => {
+      if (emb) { vectorStore.removeBySource('core', key); vectorStore.add('core', key, editEmbText, emb) }
+    }).catch(() => {})
     return { success: true }
   }
   return { error: 'not_found' }
@@ -2457,6 +3123,13 @@ ipcMain.handle('delete-archive-entry', (_, index) => {
   const archivePath = path.join(getMemoryBasePath(), 'archive.jsonl')
   if (!fs.existsSync(archivePath)) return { entries: [] }
   const lines = fs.readFileSync(archivePath, 'utf-8').trim().split('\n').filter(Boolean)
+  // Read entry before deleting to get its ID for vector cleanup
+  try {
+    const entry = JSON.parse(lines[index])
+    if (entry.date && entry.createdAt) {
+      vectorStore.removeBySource('archive', `${entry.date}:${entry.createdAt}`)
+    }
+  } catch { /* skip if parse fails */ }
   lines.splice(index, 1)
   fs.writeFileSync(archivePath, lines.length > 0 ? lines.join('\n') + '\n' : '')
   return { entries: loadArchiveEntries() }
@@ -2465,6 +3138,7 @@ ipcMain.handle('delete-archive-entry', (_, index) => {
 ipcMain.handle('delete-chat-log', (_, filename) => {
   const filePath = path.join(getMemoryBasePath(), 'chats', filename)
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+  vectorStore.removeBySourcePrefix('chat', filename.replace('.jsonl', ''))
   return { files: listChatFiles() }
 })
 
@@ -2476,6 +3150,7 @@ ipcMain.handle('clear-all-memory', () => {
   if (fs.existsSync(corePath)) fs.unlinkSync(corePath)
   if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath)
   if (fs.existsSync(chatDir)) fs.rmSync(chatDir, { recursive: true, force: true })
+  vectorStore.removeAll()
   return { success: true }
 })
 
@@ -2795,6 +3470,7 @@ async function migrateStoragePath() {
   }
   config.save({ stateOverrides, characterStoragePath: newBase })
   characterManager.setStoragePath(newBase)
+  vectorStore.reinit(getMemoryBasePath())
 
   // Notify all open windows about the path change
   const migrationResult = {
@@ -2861,6 +3537,9 @@ ipcMain.handle('copy-image', (event, dataUrl) => {
 })
 
 // --- App lifecycle ---
+app.commandLine.appendSwitch('max-tiles-for-interest-area', '512')
+app.commandLine.appendSwitch('force-gpu-mem-available-mb', '512')
+
 app.whenReady().then(() => {
   // Register sprite:// protocol for character system
   // Chromium parses standard scheme URLs like HTTP, so sprite:///idle_sheet.png
@@ -2902,18 +3581,31 @@ app.whenReady().then(() => {
     }
   }
 
-  // Restore chat history from disk (Tier 2)
-  const restored = loadRecentChatHistory()
-  if (restored.length > 0) {
-    chatHistory = restored
-    chatMessageIdCounter = Math.max(chatMessageIdCounter, ...restored.map(m => m.id || 0))
-  }
+  // Restore bubble chat mode
+  bubbleChatMode = !!cfg.bubbleChatMode
+
+  // Fix ID counter to avoid collisions with persisted messages (fresh session, don't load history)
+  const lastHistory = loadRecentChatHistory()
+  chatMessageIdCounter = lastHistory.reduce((max, m) => Math.max(max, m.id || 0), 0)
+
+  // Initialize semantic search
+  setModelPath(app.getAppPath())
+  vectorStore.init(getMemoryBasePath())
+  backfillVectors().catch(() => {})
 
   createWindow()
+
+  // Create bubble chat windows after main window is created
+  if (bubbleChatMode) {
+    ensureBubbleWindow()
+    createBubbleChatInputWindow()
+  }
 })
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  vectorStore.dispose()
+  disposeEmbedding()
 })
 
 app.on('window-all-closed', () => {

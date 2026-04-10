@@ -5,6 +5,9 @@ dist/
 # Claude Code local config
 .claude/
 
+# ML model files (bundled in installer, too large for git)
+models/
+
 # Python cache
 __pycache__/
 

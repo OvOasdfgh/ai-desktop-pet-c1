@@ -22,9 +22,9 @@ contextBridge.exposeInMainWorld('chatAPI', {
   onStreamThinking: (callback) => ipcRenderer.on('ai-stream-thinking', (event, text) => callback(text)),
   onStreamEnd: (callback) => ipcRenderer.on('ai-stream-end', () => callback()),
   onStreamError: (callback) => ipcRenderer.on('ai-stream-error', (event, errMsg) => callback(errMsg)),
-  onStreamResume: (callback) => ipcRenderer.on('ai-stream-resume', () => callback()),
   onContextUsage: (callback) => ipcRenderer.on('context-usage', (event, ratio) => callback(ratio)),
   stopStreaming: () => ipcRenderer.send('stop-streaming'),
+  onStreamingChanged: (cb) => ipcRenderer.on('chat-streaming-changed', (_, v) => cb(v)),
 
   // Markdown rendering (synchronous IPC to main process where marked+hljs live)
   renderMarkdown: (text) => ipcRenderer.sendSync('render-markdown', text),

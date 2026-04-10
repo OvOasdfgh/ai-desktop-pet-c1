@@ -22,6 +22,7 @@
     "tagNoProcess": "No app detected",
     "customize": "Customize",
     "memory": "Memory",
+    "bubbleChat": "Bubble Chat",
     "exit": "Exit"
   },
   "chat": {
@@ -32,6 +33,13 @@
     "selectAll": "Select All",
     "save": "Save",
     "copyImage": "Copy"
+  },
+  "bubble": {
+    "copy": "Copy",
+    "openChat": "Open Chat",
+    "hideBubble": "Hide",
+    "pin": "Pin",
+    "unpin": "Unpin"
   },
   "system": {
     "noApiGuide": "Right-click the pet → Settings to configure API~",

@@ -112,10 +112,12 @@
 
     switch (state) {
       case 'viewing':
+        systemBehavior.cancelPendingChains()
         sm.forceState('viewing', { priority: 2 })
         break
 
       case 'reading':
+        systemBehavior.cancelPendingChains()
         sm.forceState('reading', { priority: 2 })
         break
 
@@ -150,17 +152,25 @@
         break
 
       case 'error':
+        systemBehavior.cancelPendingChains()
         sm.releaseHold()
-        sm.forceState('error', { priority: 2 })
+        sm.forceState('error', { priority: 2, fpsOverride: 1.5 })
+        currentAiState = null
+        sm.onReturnToIdle = () => {
+          sm.onReturnToIdle = smReturnToIdle
+          if (origSmReturnToIdle) origSmReturnToIdle()
+        }
         break
 
       case 'notify':
         sm.forceState('notify', { priority: 2 })
+        currentAiState = null
         break
 
       case 'voice_reply':
         sm.releaseHold()
         sm.forceState('voice_reply', { priority: 2 })
+        currentAiState = null
         break
 
       // Memory animations (non-looping, play once → idle)
@@ -168,6 +178,7 @@
       case 'forget':
       case 'recall':
         sm.forceState(state, { priority: 2 })
+        currentAiState = null
         break
 
       // Emotion animations (non-looping, play once → idle)

@@ -40,6 +40,7 @@
     ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'del', 'code', 'pre', 'div', 'span',
       'a', 'img', 'ul', 'ol', 'li', 'blockquote', 'table', 'thead', 'tbody',
       'tr', 'th', 'td', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr',
+      's', 'u', 'sub', 'sup', 'kbd', 'mark', 'ins',
       'svg', 'path', 'rect', 'line', 'polyline', 'button'],
     ALLOWED_ATTR: ['class', 'href', 'src', 'alt', 'title', 'width', 'height',
       'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
@@ -165,10 +166,12 @@
   }
 
   // --- Init ---
+  let initReceived = false
   let initInProgress = false
   let pendingStreamEvents = []
 
   window.chatAPI.onInitChat(async (data) => {
+    initReceived = true
     initInProgress = true
     applyTheme(data.theme)
     await loadI18n(data.lang)
@@ -189,28 +192,28 @@
     if (data.isStreaming) {
       const allPetBubbles = messageList.querySelectorAll('.msg-pet .msg-bubble')
       if (allPetBubbles.length > 0) {
-        streamingBubble = allPetBubbles[allPetBubbles.length - 1]
-        streamingBubble.classList.add('streaming')
-        streamingThinkingEl = streamingBubble.querySelector('.thinking-content') || null
-        streamingContentEl = streamingBubble.querySelector('.msg-content') || null
+        const lastBubble = allPetBubbles[allPetBubbles.length - 1]
+        const lastMsgDiv = lastBubble.closest('.msg')
+        const lastMsg = messages.find(m => String(m.id) === lastMsgDiv?.dataset?.id)
+        // Only bind to last bubble if it's actually streaming — otherwise wait for ai-stream-start
+        if (lastMsg && lastMsg.streaming) {
+          streamingBubble = lastBubble
+          streamingBubble.classList.add('streaming')
+          streamingThinkingEl = streamingBubble.querySelector('.thinking-content') || null
+          streamingContentEl = streamingBubble.querySelector('.msg-content') || null
 
-        // Open thinking block so user sees ongoing thinking
-        const thinkingBlock = streamingBubble.querySelector('.thinking-block')
-        if (thinkingBlock) thinkingBlock.open = true
+          // Open thinking block so user sees ongoing thinking
+          const thinkingBlock = streamingBubble.querySelector('.thinking-block')
+          if (thinkingBlock) thinkingBlock.open = true
 
-        const msgDiv = streamingBubble.closest('.msg')
-        if (msgDiv && msgDiv.dataset.id) {
-          streamingMsgId = msgDiv.dataset.id
-          const msg = messages.find(m => String(m.id) === streamingMsgId)
-          if (msg) {
-            streamingRawText = msg.content || ''
-            streamingRawThinking = msg.thinkingContent || ''
-          }
+          streamingMsgId = lastMsgDiv.dataset.id
+          streamingRawText = lastMsg.content || ''
+          streamingRawThinking = lastMsg.thinkingContent || ''
+          if (streamingRawThinking) userCollapsedThinking = true
+
+          isStreaming = true
+          updateSendButton()
         }
-        if (streamingRawThinking) userCollapsedThinking = true
-
-        isStreaming = true
-        updateSendButton()
       }
     }
     flushPendingStreamEvents()
@@ -272,9 +275,30 @@
     document.body.dataset.theme = theme
   }
 
+  // Batch theme + color scheme updates into a single rAF to avoid double reflow
+  let pendingTheme = null
+  let pendingColors = null
+  let pendingStyleRAF = null
+
+  function scheduleMergedStyleUpdate() {
+    if (pendingStyleRAF) return
+    pendingStyleRAF = requestAnimationFrame(() => {
+      pendingStyleRAF = null
+      if (pendingColors) {
+        Object.entries(pendingColors).forEach(([k, v]) => document.body.style.setProperty(k, v))
+        pendingColors = null
+      }
+      if (pendingTheme) {
+        applyTheme(pendingTheme)
+        pendingTheme = null
+        if (!userScrolledUp) scrollToBottom()
+      }
+    })
+  }
+
   window.chatAPI.onThemeChanged((theme) => {
-    applyTheme(theme)
-    if (!userScrolledUp) scrollToBottom()
+    pendingTheme = theme
+    scheduleMergedStyleUpdate()
   })
   window.chatAPI.onLanguageChanged((lang) => loadI18n(lang))
 
@@ -452,6 +476,14 @@
   }
 
   function handleStreamStart(msgId) {
+    // Idempotent: if already streaming, just update ID (tool loop sends new start)
+    if (streamingBubble) {
+      streamingMsgId = msgId != null ? String(msgId) : null
+      const div = streamingBubble.closest('.msg')
+      if (div && streamingMsgId) div.dataset.id = streamingMsgId
+      return
+    }
+
     isStreaming = true
     updateSendButton()
 
@@ -581,8 +613,8 @@
         streamingBubble.parentElement.appendChild(footer)
       }
 
-      // Collapse thinking when text content exists (matches normal streaming behavior)
-      if (streamingRawText.trim()) {
+      // Collapse thinking when content exists (text or images)
+      if (streamingRawText.trim() || streamingBubble.querySelector('.msg-bubble-image')) {
         const tb = streamingBubble.querySelector('.thinking-block')
         if (tb && tb.open) tb.open = false
       }
@@ -682,33 +714,42 @@
     }
   }
 
-  // IPC listeners — buffer events during init to avoid race with async loadI18n
+  // IPC listeners
+  // Pre-init (initReceived=false): drop events — chatHistory in init-chat is source of truth
+  // During init (initInProgress=true): buffer events to apply after async loadI18n + DOM build
+  // After init: process directly
   window.chatAPI.onStreamStart((msgId) => {
+    if (!initReceived) return
     if (initInProgress) { pendingStreamEvents.push({ type: 'start', data: msgId }); return }
     handleStreamStart(msgId)
   })
 
   window.chatAPI.onStreamThinking((text) => {
+    if (!initReceived) return
     if (initInProgress) { pendingStreamEvents.push({ type: 'thinking', data: text }); return }
     handleStreamThinking(text)
   })
 
   window.chatAPI.onStreamChunk((text) => {
+    if (!initReceived) return
     if (initInProgress) { pendingStreamEvents.push({ type: 'chunk', data: text }); return }
     handleStreamChunk(text)
   })
 
   window.chatAPI.onStreamEnd(() => {
+    if (!initReceived) return
     if (initInProgress) { pendingStreamEvents.push({ type: 'end' }); return }
     handleStreamEnd()
   })
 
   window.chatAPI.onStreamError((errMsg) => {
+    if (!initReceived) return
     if (initInProgress) { pendingStreamEvents.push({ type: 'error', data: errMsg }); return }
     handleStreamError(errMsg)
   })
 
   window.chatAPI.onStreamImages((images) => {
+    if (!initReceived) return
     if (initInProgress) { pendingStreamEvents.push({ type: 'images', data: images }); return }
     handleStreamImages(images)
   })
@@ -837,6 +878,12 @@
       sendBtn.querySelectorAll('.stop-icon').forEach(el => el.style.display = 'none')
     }
   }
+
+  // Immediate streaming state from main (arrives before ai-stream-start)
+  window.chatAPI.onStreamingChanged((streaming) => {
+    isStreaming = streaming
+    updateSendButton()
+  })
 
   // --- Scrolling ---
   let _scrollRAF = null
@@ -1103,9 +1150,10 @@
   // Focus input on load
   setTimeout(() => chatInput.focus(), 200)
 
-  // Color scheme
+  // Color scheme — batched with theme via scheduleMergedStyleUpdate
   window.chatAPI.onColorScheme((data) => {
     if (!data || !data.derived) return
-    Object.entries(data.derived).forEach(([k, v]) => document.body.style.setProperty(k, v))
+    pendingColors = data.derived
+    scheduleMergedStyleUpdate()
   })
 })()

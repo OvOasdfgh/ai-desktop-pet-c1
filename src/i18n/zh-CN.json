@@ -22,6 +22,7 @@
     "tagNoProcess": "未检测到应用",
     "customize": "个性化",
     "memory": "记忆管理",
+    "bubbleChat": "气泡聊天",
     "exit": "退出"
   },
   "chat": {
@@ -32,6 +33,13 @@
     "selectAll": "全选",
     "save": "保存",
     "copyImage": "复制"
+  },
+  "bubble": {
+    "copy": "复制",
+    "openChat": "打开聊天",
+    "hideBubble": "隐藏",
+    "pin": "固定",
+    "unpin": "取消固定"
   },
   "system": {
     "noApiGuide": "右键点击桌宠 → 设置，配置 API 就能聊天啦~",

@@ -41,4 +41,9 @@ contextBridge.exposeInMainWorld('petAPI', {
 
   // State overrides
   onStateOverrideChanged: (cb) => ipcRenderer.on('state-override-changed', (_, d) => cb(d)),
+
+  // Thrown lifecycle
+  petThrown: () => ipcRenderer.send('pet-thrown'),
+  thrownLanded: () => ipcRenderer.send('thrown-landed'),
+
 })

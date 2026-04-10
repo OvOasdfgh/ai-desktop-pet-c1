@@ -34,6 +34,7 @@ class SystemBehaviorManager {
     this.boredActive = false
     this.wantToTalkTimer = null
     this.boredMissCount = 0 // Guaranteed want_to_talk after 3 consecutive misses
+    this.greetingTimer = null
 
     // Walk system
     this.WALK_MIN_INTERVAL = 120000 // 2 minutes
@@ -163,7 +164,8 @@ class SystemBehaviorManager {
    */
   checkDailyGreeting() {
     // Small delay to let initial render settle
-    setTimeout(() => {
+    this.greetingTimer = setTimeout(() => {
+      this.greetingTimer = null
       this.wakeupPhase = 'greeting'
       this.sm.forceState('greeting', { priority: 2 })
     }, 500)
@@ -272,6 +274,7 @@ class SystemBehaviorManager {
   // --- Internal: Wakeup sequence ---
 
   _playWakeupSequence() {
+    if (this._isAiAnimating()) return
     this.mode = 'wakeup'
     this.wakeupPhase = 'wakeup'
     this.sm.forceState('wakeup', { priority: 2 })
@@ -618,5 +621,15 @@ class SystemBehaviorManager {
     this.curiousCooldownUntil = Date.now() + this.CURIOUS_COOLDOWN
     this.curiousPhase = 'first'
     this.sm.forceState('curious', { priority: 2 })
+  }
+
+  cancelPendingChains() {
+    this.wakeupPhase = null
+    this.curiousPhase = null
+    this.boredPhase = null
+    if (this.greetingTimer) {
+      clearTimeout(this.greetingTimer)
+      this.greetingTimer = null
+    }
   }
 }

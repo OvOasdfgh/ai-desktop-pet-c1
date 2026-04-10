@@ -1,0 +1,137 @@
+@font-face {
+  font-family: 'Fusion Pixel';
+  src: url('../../fonts/FusionPixel-12-zhHans.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+[data-theme="pixel"] {
+  --font-family: 'Fusion Pixel', monospace;
+  --font-size: 12px;
+  --line-height: 1.5;
+  --border-radius: 0px;
+  --border: 2px solid rgb(200, 180, 170);
+  --border-light: 1px solid rgb(220, 200, 190);
+  --bg-input: rgb(255, 255, 255);
+  --bg-bubble: rgb(255, 248, 240);
+  --text-primary: rgb(80, 60, 50);
+  --text-secondary: rgb(160, 140, 130);
+  --send-bg: rgb(255, 200, 200);
+  --send-hover: rgb(255, 180, 180);
+  --send-size: 28px;
+  --scrollbar-width: 4px;
+  --scrollbar-thumb: rgb(200, 180, 170);
+  --scrollbar-radius: 0px;
+}
+
+[data-theme="clean"] {
+  --font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-size: 13px;
+  --line-height: 1.5;
+  --border-radius: 12px;
+  --border: 1px solid rgba(200, 180, 170, 0.3);
+  --border-light: 1px solid rgba(200, 180, 170, 0.15);
+  --bg-input: rgba(255, 255, 255, 0.8);
+  --bg-bubble: rgba(255, 248, 240, 0.95);
+  --text-primary: rgb(80, 60, 50);
+  --text-secondary: rgb(160, 140, 130);
+  --send-bg: rgba(255, 200, 200, 0.9);
+  --send-hover: rgba(255, 180, 180, 0.9);
+  --send-size: 28px;
+  --scrollbar-width: 6px;
+  --scrollbar-thumb: rgba(200, 180, 170, 0.4);
+  --scrollbar-radius: 3px;
+}
+
+[data-theme="pixel"] .icon-clean { display: none; }
+[data-theme="clean"] .icon-pixel { display: none; }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  background: transparent;
+  overflow: hidden;
+}
+
+.bci-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 6px;
+  background: var(--bg-bubble);
+  border: var(--border);
+  border-radius: var(--border-radius);
+}
+
+.bci-input-wrap {
+  flex: 1;
+  min-width: 0;
+  border: var(--border-light);
+  border-radius: var(--border-radius);
+  overflow: clip;
+  background: var(--bg-input);
+  display: flex;
+}
+
+.bci-input-wrap:focus-within {
+  border-color: var(--c-accent, rgb(255, 180, 180));
+}
+
+#bciInput {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  min-height: var(--send-size);
+  max-height: 60px;
+  border: none;
+  border-radius: 0;
+  padding: 4px 8px;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  color: var(--text-primary);
+  background: var(--bg-input);
+  outline: none;
+  overflow-y: hidden;
+}
+
+#bciInput::placeholder {
+  color: var(--text-secondary);
+}
+
+#bciInput::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+}
+
+#bciInput::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-radius);
+}
+
+.bci-send {
+  width: var(--send-size);
+  height: var(--send-size);
+  border: none;
+  border-radius: var(--border-radius);
+  background: var(--send-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bci-send:hover {
+  background: var(--send-hover);
+}
+
+.bci-send.is-streaming {
+  background: rgb(200, 180, 170);
+}
+
+.bci-send.is-streaming:hover {
+  background: rgb(180, 160, 150);
+}
+

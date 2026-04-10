@@ -206,6 +206,8 @@ class InteractionManager {
 
     // Freeze state machine — we control animation manually during thrown
     this.sm.forceState('thrown', { priority: 3, freezeOnLastFrame: true })
+    this.sm.freezing = true // Prevent state machine from advancing frames — physics loop controls all rendering
+    this.petAPI.petThrown()
 
     // Start physics immediately (no delay)
     this._startThrownPhysics()
@@ -306,6 +308,7 @@ class InteractionManager {
       this.thrownLandingTimer = null
       this.sm.returnToIdle()
       this.state = 'IDLE'
+      this.petAPI.thrownLanded()
     }, holdMs)
   }
 

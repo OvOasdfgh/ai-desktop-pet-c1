@@ -21,17 +21,21 @@
 
 **AI 聊天** - 支持 OpenAI 兼容格式和 Anthropic 原生 API。流式输出、思考过程、Markdown 渲染、代码高亮。
 
+**气泡聊天模式** - 无需打开面板，直接在桌宠旁弹出输入框和气泡对话。桌宠头顶显示回复气泡，支持右键菜单（复制/固定/隐藏），可与面板模式共存。
+
 **36 个像素动画** - 手绘 32x32 像素风格，包含呼吸、眨眼、思考、开心、拖拽、睡觉等丰富动画，实时响应你的操作。
 
 **智能行为** - 检测你的活动（写代码、浏览网页、玩游戏），夜晚会犯困，自己在桌面散步，主动找你聊天。
 
-**记忆系统** - 三层记忆：核心记忆（用户偏好）、聊天记录、对话归档摘要。你的桌宠会记住你。
+**记忆系统** - 三层记忆：核心记忆（用户偏好）、聊天记录、对话归档摘要。内置语义搜索引擎（离线多语言模型），支持中英文模糊匹配——问"喜欢吃什么"能找到"最爱拉面"。你的桌宠真的会记住你。
 
 **内置工具** - 设定时提醒、获取当前时间、生成图片（需独立配置图片 API），通过 function calling 自然调用。
 
+**双主题** - 像素风（Fusion Pixel 字体 + 方角）和简约风（系统字体 + 圆角 + 毛玻璃），一键切换。
+
 **深度自定义** - 6 套预设配色 + 自定义 8 色调色板、面板透明度、导入自定义角色、逐个动画替换。
 
-**隐私优先** - 所有数据本地存储，API Key 使用系统级加密（DPAPI），无遥测，无云存储。
+**隐私优先** - 所有数据本地存储，API Key 使用系统级加密（DPAPI），语义搜索模型完全离线运行，无遥测，无云存储。
 
 ## 截图
 
@@ -59,6 +63,14 @@
 <tr>
 <td><img src="docs/screenshots/customize-colors.png" width="280"></td>
 <td><img src="docs/screenshots/customize-animations.png" width="280"></td>
+</tr>
+<tr>
+<td align="center"><strong>气泡聊天 - 简约风</strong></td>
+<td align="center"><strong>气泡聊天 - 像素风</strong></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/bubble-chat-clean.png" width="280"></td>
+<td><img src="docs/screenshots/bubble-chat-pixel.png" width="280"></td>
 </tr>
 </table>
 
@@ -113,6 +125,7 @@ pnpm run build
 | 操作 | 方式 |
 |------|------|
 | 打开聊天 | 点击桌宠 / 右键 > 聊天 |
+| 气泡聊天 | 右键 > 气泡模式，在桌宠旁直接输入 |
 | 拖拽 | 按住拖动桌宠 |
 | 抚摸 | 长按桌宠 |
 | 戳一下 | 单击桌宠 |
@@ -143,14 +156,22 @@ pnpm run build
 | 核心记忆 | `memory/core.json` |
 | 聊天记录 | `memory/chats/*.jsonl` |
 | 对话归档 | `memory/archive.jsonl` |
+| 语义索引 | `memory/vectors.json` |
 | 自定义角色 | `characters/` |
 | 动画覆盖 | `state-overrides/` |
 
 卸载应用**不会**删除你的数据。如需完全清除，手动删除 `%APPDATA%/c1-pet/` 文件夹。
 
+## 系统要求
+
+- Windows 10/11（64 位）
+- 内存：建议 4GB+（语义搜索模型运行时额外占用 ~150MB，空闲时自动释放）
+
 ## 许可证
 
 [MIT](LICENSE)
+
+本项目使用 [paraphrase-multilingual-MiniLM-L12-v2](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2) 模型进行语义搜索，该模型基于 [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) 协议开源。
 
 ---
 
@@ -171,17 +192,21 @@ pnpm run build
 
 **AI Companion** - Chat with your desktop pet using OpenAI-compatible or Anthropic APIs. Streaming responses with thinking process, Markdown rendering, and code highlighting.
 
+**Bubble Chat Mode** - Chat without opening a panel. A floating input box appears next to the pet, and replies show as speech bubbles above its head. Supports right-click menu (copy/pin/hide) and works alongside the panel mode.
+
 **36 Pixel Animations** - Hand-drawn 32x32 pixel art with idle breathing, emotions, interactions, and contextual behaviors. The pet reacts to your actions in real-time.
 
 **Smart Behaviors** - Detects your activity (coding, browsing, gaming), gets sleepy at night, walks around your desktop, and proactively starts conversations.
 
-**Memory System** - Three-tier memory: core memories (user preferences), chat logs, and archived conversation summaries. Your pet remembers you across sessions.
+**Memory System** - Three-tier memory: core memories (user preferences), chat logs, and archived conversation summaries. Built-in semantic search engine (offline multilingual model) for fuzzy matching across Chinese and English. Your pet truly remembers you.
 
 **Built-in Tools** - Set reminders, get current time, generate images (with separate image API), and express emotions through function calling.
 
+**Dual Themes** - Pixel theme (Fusion Pixel font + sharp corners) and Clean theme (system font + rounded corners + frosted glass), switchable with one click.
+
 **Full Customization** - 6 color presets + custom 8-color palette, adjustable panel transparency, custom character import, and per-animation sprite replacement.
 
-**Privacy First** - All data stored locally. API keys encrypted with OS-level protection (DPAPI). No telemetry, no cloud storage.
+**Privacy First** - All data stored locally. API keys encrypted with OS-level protection (DPAPI). Semantic search model runs entirely offline. No telemetry, no cloud storage.
 
 ## Installation
 
@@ -203,12 +228,19 @@ pnpm install
 pnpm start
 ```
 
+> **Note**: The semantic search model (~118MB) is bundled in the installer but excluded from the git repository. When running from source, the model will be downloaded automatically on first use. To build the installer, place the model files in `models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/` first.
+
 To build the installer:
 
 ```bash
 pnpm run build
 # Output: dist/C1 Desktop Pet Setup x.x.x.exe
 ```
+
+### System Requirements
+
+- Windows 10/11 (64-bit)
+- RAM: 4GB+ recommended (semantic search model uses ~150MB when active, auto-released when idle)
 
 ## Configuration
 
@@ -234,6 +266,7 @@ Separate API configuration for image generation (OpenAI-compatible format). When
 | Action | How |
 |--------|-----|
 | Open chat | Click the pet or right-click > Chat |
+| Bubble chat | Right-click > Bubble Mode, type next to the pet |
 | Drag | Click and drag the pet |
 | Pet | Long press on the pet |
 | Poke | Single click |
@@ -264,6 +297,7 @@ All user data is stored in `%APPDATA%/c1-pet/`:
 | Memory | `memory/core.json` |
 | Chat Logs | `memory/chats/*.jsonl` |
 | Archives | `memory/archive.jsonl` |
+| Semantic Index | `memory/vectors.json` |
 | Custom Characters | `characters/` |
 | State Overrides | `state-overrides/` |
 
@@ -276,6 +310,7 @@ Uninstalling the app does **not** delete your data. To fully remove, delete the 
 | Framework | Electron 41 |
 | Animation | Sprite Sheet + Canvas |
 | AI | OpenAI-compatible + Anthropic native APIs |
+| Semantic Search | paraphrase-multilingual-MiniLM-L12-v2 via transformers.js |
 | Markdown | marked + highlight.js + DOMPurify |
 | Package Manager | pnpm |
 
@@ -290,6 +325,9 @@ src/
 │   ├── provider.js          # Base class + factory
 │   ├── openai-provider.js   # OpenAI-compatible streaming
 │   └── anthropic-provider.js # Anthropic native streaming
+├── memory/
+│   ├── embedding.js         # Lazy-loaded multilingual embedding model
+│   └── vector-store.js      # JSON vector store with cosine similarity
 ├── renderer/
 │   ├── SpriteRenderer.js    # Canvas rendering + hit detection
 │   ├── StateMachine.js      # Priority-based state machine
@@ -299,7 +337,8 @@ src/
 │   ├── settings/            # Settings panel
 │   ├── customize/           # Customization panel
 │   ├── memory/              # Memory management panel
-│   ├── bubble/              # Notification bubble
+│   ├── bubble/              # Notification/chat bubble
+│   ├── bubble-chat/         # Bubble mode input box
 │   └── context-menu/        # Custom right-click menu
 ├── i18n/                    # English + Simplified Chinese
 └── data/                    # App category detection rules
@@ -338,3 +377,5 @@ See the built-in C1 character for reference.
 ## License
 
 [MIT](LICENSE)
+
+This project uses [paraphrase-multilingual-MiniLM-L12-v2](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2) for semantic search, licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
